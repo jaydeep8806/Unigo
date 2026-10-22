@@ -22,7 +22,7 @@ function RootNavigationGate() {
     }
   }, [isLoading, hasMadeDecision, segments, router]);
 
-  if (isLoading) {
+  if (isLoading || (!hasMadeDecision && segments[0] !== 'location-permission')) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={THEME.colors.primary} />
