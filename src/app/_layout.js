@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LocationProvider, useLocation } from '../context/LocationProvider';
+import { WalletProvider } from '../context/WalletProvider';
 import { THEME } from '../constants/theme';
 
 function RootNavigationGate() {
@@ -37,8 +38,10 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <LocationProvider>
-        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-        <RootNavigationGate />
+        <WalletProvider>
+          <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+          <RootNavigationGate />
+        </WalletProvider>
       </LocationProvider>
     </SafeAreaProvider>
   );

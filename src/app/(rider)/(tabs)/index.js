@@ -15,7 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useLocation } from '../../../context/LocationProvider';
-import { CITIES } from '../../../constants/config';
+import { useWallet } from '../../../context/WalletProvider';
+import { CITIES, CURRENCY_SYMBOL } from '../../../constants/config';
 import { THEME } from '../../../constants/theme';
 import PressableScale from '../../../components/PressableScale';
 import Toast from '../../../components/Toast';
@@ -51,6 +52,7 @@ export default function RiderHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { selectedCity, setCity } = useLocation();
+  const { balance } = useWallet();
 
   const [cityModalVisible, setCityModalVisible] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
@@ -84,25 +86,25 @@ export default function RiderHomeScreen() {
       badge: '50% Off',
       badgeType: 'discount',
       image: FOOD_IMG,
-      onPress: () => showToast('UniGo Food is coming soon!'),
+      onPress: () => router.push({ pathname: '/(rider)/nearby', params: { type: 'food' } }),
     },
     {
       id: 'shops',
       title: 'Shops',
       image: SHOPS_IMG,
-      onPress: () => showToast('UniGo Shops is coming soon!'),
+      onPress: () => router.push({ pathname: '/(rider)/nearby', params: { type: 'shops' } }),
     },
     {
       id: 'homespa',
       title: 'Home & Spa',
       image: HOMESPA_IMG,
-      onPress: () => showToast('Home & Spa services are coming soon!'),
+      onPress: () => router.push('/(rider)/homespa'),
     },
     {
       id: 'wallet',
       title: 'Wallet',
       image: WALLET_IMG,
-      onPress: () => showToast('UniGo Wallet is coming soon!'),
+      onPress: () => router.push('/(rider)/wallet'),
     },
     {
       id: 'box',
@@ -110,13 +112,13 @@ export default function RiderHomeScreen() {
       badge: 'New',
       badgeType: 'new',
       image: BOX_IMG,
-      onPress: () => showToast('UniGo Box is coming soon!'),
+      onPress: () => router.push('/(rider)/box'),
     },
     {
       id: 'donate',
       title: 'Donate',
       image: DONATE_IMG,
-      onPress: () => showToast('UniGo Donate is coming soon!'),
+      onPress: () => router.push('/(rider)/donate'),
     },
     {
       id: 'carpool',
@@ -124,7 +126,7 @@ export default function RiderHomeScreen() {
       badge: 'New',
       badgeType: 'new',
       image: CARPOOL_IMG,
-      onPress: () => showToast('UniGo Carpool is coming soon!'),
+      onPress: () => router.push({ pathname: '/(rider)/book', params: { type: 'carpool' } }),
     },
   ];
 
@@ -133,10 +135,10 @@ export default function RiderHomeScreen() {
     {
       id: 'wallet',
       label: 'Balance',
-      value: '₹0.00',
+      value: `${CURRENCY_SYMBOL}${Number(balance || 0).toFixed(2)}`,
       icon: 'wallet-outline',
       image: WALLET_IMG,
-      onPress: () => showToast('UniGo Wallet is coming soon!'),
+      onPress: () => router.push('/(rider)/wallet'),
     },
     {
       id: 'payment',
@@ -240,7 +242,7 @@ export default function RiderHomeScreen() {
                 </PressableScale>
               </View>
               <Text style={styles.greetingText}>{getGreeting()}</Text>
-              <Text style={styles.headerSubtitle}>Where are you heading today?</Text>
+              {/* <Text style={styles.headerSubtitle}>Where are you heading today?</Text> */}
             </View>
 
             {/* Notification Bell Button */}
@@ -263,10 +265,10 @@ export default function RiderHomeScreen() {
             <View style={styles.searchIconBox}>
               <Ionicons name="search" size={20} color={THEME.colors.primary} />
             </View>
-            <Text style={styles.searchPlaceholder}>Where to?</Text>
-            <View style={styles.bookPill}>
+            <Text style={styles.searchPlaceholder}>Type to search</Text>
+            {/* <View style={styles.bookPill}>
               <Text style={styles.bookPillText}>Book Ride</Text>
-            </View>
+            </View> */}
           </PressableScale>
         </LinearGradient>
 
@@ -397,7 +399,7 @@ export default function RiderHomeScreen() {
 
               <PressableScale
                 style={styles.promoButton}
-                onPress={() => showToast('UniGo Carpool is coming soon!')}
+                onPress={() => router.push({ pathname: '/(rider)/book', params: { type: 'carpool' } })}
               >
                 <Text style={styles.promoButtonText}>Try Carpool</Text>
                 <Ionicons name="arrow-forward" size={14} color="#064E3B" style={{ marginLeft: 6 }} />
@@ -418,7 +420,7 @@ export default function RiderHomeScreen() {
               </Text>
               <PressableScale
                 style={styles.foodPromoButton}
-                onPress={() => showToast('UniGo Food is coming soon!')}
+                onPress={() => router.push({ pathname: '/(rider)/nearby', params: { type: 'food' } })}
               >
                 <Text style={styles.foodPromoButtonText}>Order now</Text>
                 <Ionicons

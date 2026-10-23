@@ -21,3 +21,34 @@ export const CITIES = [
   { name: 'Delhi', lat: 28.6139, lng: 77.2090, state: 'Delhi NCR' },
   { name: 'Bengaluru', lat: 12.9716, lng: 77.5946, state: 'Karnataka' },
 ];
+
+export const DONATE_UPI_ID = 'yourupi@bank';
+export const DONATE_NAME = 'UniGo';
+
+/** Vehicle tiers reused from the legacy monolith */
+export const VEHICLE_TYPES = [
+  {
+    id: 'bike',
+    name: 'UniGo Moto',
+    icon: '🏍️',
+    capacity: '1 Seat',
+    baseFare: 20,
+    perKm: 8,
+  },
+  {
+    id: 'auto',
+    name: 'UniGo Auto',
+    icon: '🛺',
+    capacity: '3 Seats',
+    baseFare: 30,
+    perKm: 12,
+  },
+  {
+    id: 'car',
+    name: 'UniGo Prime',
+    icon: '🚗',
+    capacity: '4 Seats',
+    baseFare: 50,
+    perKm: 18,
+  },
+];
