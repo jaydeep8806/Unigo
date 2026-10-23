@@ -1,33 +1,28 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../../../constants/theme';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 8);
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: THEME.colors.primary,
-        tabBarInactiveTintColor: THEME.colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: THEME.colors.white,
-          borderTopColor: THEME.colors.border,
-          borderTopWidth: 1,
-          height: Platform.OS === 'android' ? 64 : 84,
-          paddingBottom: Platform.OS === 'android' ? 10 : 26,
-          paddingTop: 8,
-          elevation: 8,
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
+        tabBarInactiveTintColor: THEME.colors.mutedText,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            height: 58 + bottomInset,
+            paddingBottom: bottomInset,
+          },
+        ],
+        tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
       <Tabs.Screen
@@ -72,3 +67,27 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: THEME.colors.white,
+    borderTopColor: THEME.colors.border,
+    borderTopWidth: 1,
+    paddingTop: 8,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 12,
+  },
+  tabBarLabel: {
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.semibold,
+    marginTop: 2,
+  },
+});
+

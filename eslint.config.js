@@ -17,6 +17,7 @@ module.exports = [
     },
     rules: {
       'import/no-unresolved': ['error', { ignore: ['^@expo/vector-icons'] }],
+      'import/named': 'off',
     },
     languageOptions: {
       globals: {

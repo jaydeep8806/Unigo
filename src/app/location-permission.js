@@ -54,7 +54,7 @@ export default function LocationPermissionScreen() {
         <View style={styles.badgeRow}>
           <View style={styles.badge}>
             <Ionicons name="shield-checkmark" size={14} color={THEME.colors.primary} />
-            <Text style={styles.badgeText}>Verified Student Rides</Text>
+            <Text style={styles.badgeText}>Safe Rides</Text>
           </View>
         </View>
 
@@ -71,7 +71,7 @@ export default function LocationPermissionScreen() {
         <View style={styles.textContainer}>
           <Text style={styles.title}>Enable Location</Text>
           <Text style={styles.description}>
-            UniGo needs your location to find nearby drivers, estimate pickup times, and calculate accurate campus fares.
+            UniGo needs your location to find nearby drivers, estimate pickup times, and calculate accurate fares.
           </Text>
         </View>
 
@@ -82,7 +82,7 @@ export default function LocationPermissionScreen() {
             <View style={styles.deniedTextCol}>
               <Text style={styles.deniedTitle}>Location Access Denied</Text>
               <Text style={styles.deniedSubtitle}>
-                Please choose your campus city manually below to explore rides and services.
+                Please choose your city manually below to explore rides and services.
               </Text>
             </View>
           </View>
@@ -138,7 +138,7 @@ export default function LocationPermissionScreen() {
                 </TouchableOpacity>
               </View>
               <Text style={styles.modalSubtitle}>
-                UniGo campus rides are currently available in these cities across India.
+                UniGo rides are currently available in these cities across India.
               </Text>
             </View>
 

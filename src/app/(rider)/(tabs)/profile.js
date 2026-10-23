@@ -31,7 +31,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Student Profile</Text>
+        <Text style={styles.headerTitle}>Profile</Text>
       </View>
 
       <View style={styles.content}>
@@ -40,19 +40,18 @@ export default function ProfileScreen() {
           <View style={styles.avatarCircle}>
             <Ionicons name="person" size={36} color={THEME.colors.primary} />
           </View>
-          <Text style={styles.nameText}>Campus Student</Text>
-          <Text style={styles.emailText}>student@university.edu.in</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>UniGo Rider</Text>
-          </View>
+          <Text style={styles.nameText}>Guest</Text>
+          <Text style={styles.riderTag}>UniGo Rider</Text>
         </View>
 
         {/* Selected City Info */}
         <View style={styles.infoRowCard}>
           <Ionicons name="location" size={20} color={THEME.colors.primary} style={{ marginRight: 12 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.infoLabel}>Current Campus City</Text>
-            <Text style={styles.infoValue}>{selectedCity?.name} ({selectedCity?.state})</Text>
+            <Text style={styles.infoLabel}>Current City</Text>
+            <Text style={styles.infoValue}>
+              {selectedCity?.name} ({selectedCity?.state})
+            </Text>
           </View>
         </View>
 
@@ -61,7 +60,7 @@ export default function ProfileScreen() {
           <Ionicons name="sparkles" size={24} color={THEME.colors.primary} style={{ marginBottom: 8 }} />
           <Text style={styles.placeholderTitle}>Profile coming next</Text>
           <Text style={styles.placeholderSubtitle}>
-            Full Supabase authentication, student ID verification, and ride settings will be connected in future stages.
+            Account preferences, trip history, and ride settings will be connected in future stages.
           </Text>
         </View>
 
@@ -86,14 +85,15 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.border,
+    backgroundColor: THEME.colors.white,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: THEME.colors.textPrimary,
+    fontWeight: THEME.fontWeights.extrabold,
+    color: THEME.colors.text,
   },
   content: {
     flex: 1,
@@ -102,8 +102,8 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     backgroundColor: THEME.colors.white,
-    borderRadius: THEME.radius.lg,
-    padding: 20,
+    borderRadius: THEME.radius.card,
+    padding: 24,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
@@ -111,35 +111,24 @@ const styles = StyleSheet.create({
     ...THEME.shadows.card,
   },
   avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: THEME.colors.primaryLight,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#E6F4EA',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   nameText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: THEME.colors.textPrimary,
+    fontSize: 20,
+    fontWeight: THEME.fontWeights.extrabold,
+    color: THEME.colors.text,
   },
-  emailText: {
+  riderTag: {
     fontSize: 13,
-    color: THEME.colors.textSecondary,
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: THEME.colors.primaryLight,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: THEME.radius.full,
-    marginTop: 10,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: THEME.colors.primaryDark,
+    fontWeight: THEME.fontWeights.semibold,
+    color: THEME.colors.primary,
+    marginTop: 4,
   },
   infoRowCard: {
     flexDirection: 'row',
@@ -154,27 +143,29 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: THEME.colors.textSecondary,
+    fontWeight: THEME.fontWeights.bold,
+    color: THEME.colors.mutedText,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   infoValue: {
     fontSize: 14,
-    fontWeight: '700',
-    color: THEME.colors.textPrimary,
-    marginTop: 1,
+    fontWeight: THEME.fontWeights.bold,
+    color: THEME.colors.text,
+    marginTop: 2,
   },
   placeholderCard: {
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#DCFCE7',
-    borderRadius: THEME.radius.lg,
+    borderRadius: THEME.radius.card,
     padding: 18,
     alignItems: 'center',
     marginBottom: 24,
   },
   placeholderTitle: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: THEME.fontWeights.bold,
     color: THEME.colors.primaryDark,
     marginBottom: 4,
   },
@@ -190,13 +181,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     borderRadius: THEME.radius.md,
-    backgroundColor: THEME.colors.dangerLight,
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
   },
   resetButtonText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: THEME.fontWeights.bold,
     color: THEME.colors.danger,
   },
 });
+

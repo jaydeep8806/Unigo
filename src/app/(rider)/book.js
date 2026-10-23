@@ -33,7 +33,7 @@ export default function BookScreen() {
           <Ionicons name="search" size={20} color={THEME.colors.primary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Where to? (e.g. Campus Gate, Hostel, Station)"
+            placeholder="Where to? (e.g. Railway Station, Airport, Market)"
             placeholderTextColor={THEME.colors.textMuted}
             autoFocus={true}
           />
@@ -47,7 +47,7 @@ export default function BookScreen() {
         </View>
         <Text style={styles.placeholderTitle}>Map coming next</Text>
         <Text style={styles.placeholderSubtitle}>
-          Interactive Leaflet & OpenStreetMap campus routing centered on {selectedCity?.name || 'Rajkot'} will be connected here.
+          Interactive Leaflet & OpenStreetMap routing centered on {selectedCity?.name || 'Rajkot'} will be connected here.
         </Text>
       </View>
 

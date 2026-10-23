@@ -8,7 +8,7 @@ export default function ActivitiesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Your Activities</Text>
+        <Text style={styles.headerTitle}>Activities</Text>
       </View>
 
       <View style={styles.emptyContainer}>
@@ -17,7 +17,7 @@ export default function ActivitiesScreen() {
         </View>
         <Text style={styles.emptyTitle}>No rides yet</Text>
         <Text style={styles.emptySubtitle}>
-          When you book campus commutes, rides, or split fares, your ride history and receipts will appear here.
+          Your trips will appear here
         </Text>
       </View>
     </SafeAreaView>
@@ -31,14 +31,15 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.border,
+    backgroundColor: THEME.colors.white,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: THEME.colors.textPrimary,
+    fontWeight: THEME.fontWeights.extrabold,
+    color: THEME.colors.text,
   },
   emptyContainer: {
     flex: 1,
@@ -51,21 +52,21 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: THEME.colors.primaryLight,
+    backgroundColor: '#E6F4EA',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: THEME.colors.textPrimary,
-    marginBottom: 8,
+    fontWeight: THEME.fontWeights.bold,
+    color: THEME.colors.text,
+    marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 14,
-    lineHeight: 20,
-    color: THEME.colors.textSecondary,
+    color: THEME.colors.mutedText,
     textAlign: 'center',
   },
 });
+

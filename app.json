@@ -30,7 +30,8 @@
           "locationAlwaysAndWhenInUsePermission": "Allow unigo to use your location to calculate routes."
         }
       ],
-      "expo-router"
+      "expo-router",
+      "expo-image"
     ]
   }
 }
