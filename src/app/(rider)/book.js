@@ -8,18 +8,22 @@ import {
   ScrollView,
   ActivityIndicator,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocation } from '../../context/LocationProvider';
 import { THEME } from '../../constants/theme';
-import { CURRENCY_SYMBOL, VEHICLE_TYPES, DEFAULT_CITY } from '../../constants/config';
+import { CURRENCY_SYMBOL, DEFAULT_CITY } from '../../constants/config';
 import { searchLocations, reverseGeocode } from '../../services/geocoding';
 import { fetchDrivingRoute } from '../../services/osrm';
+import { calculateAllFares } from '../../services/pricing';
 import LeafletMap from '../../components/LeafletMap';
 import PressableScale from '../../components/PressableScale';
 import Toast from '../../components/Toast';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function BookScreen() {
   const router = useRouter();
@@ -28,7 +32,7 @@ export default function BookScreen() {
   const isCarpool = params.type === 'carpool';
   const shouldAutoFocus = params.autoFocus === 'true';
 
-  const { coordinates, selectedCity } = useLocation();
+  const { coordinates, selectedCity, permissionStatus, requestLocation } = useLocation();
 
   // Active user origin (strictly within India)
   const origin = useMemo(() => {
@@ -59,15 +63,20 @@ export default function BookScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
-  // Picker mode state
+  // Pin Drop (Picker) mode state
   const [isPickerMode, setIsPickerMode] = useState(false);
   const [pickerCoords, setPickerCoords] = useState(null);
+  const [pickerAddress, setPickerAddress] = useState('');
+  const [pickerAddressLoading, setPickerAddressLoading] = useState(false);
+  const [isMapDragging, setIsMapDragging] = useState(false);
+  const [flyToCoords, setFlyToCoords] = useState(null);
+  const pickerDebounceRef = useRef(null);
 
   // Route & Fares
   const [routeCoords, setRouteCoords] = useState([]);
   const [routeInfo, setRouteInfo] = useState(null); // { distanceKm, durationMins }
   const [routeLoading, setRouteLoading] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState(VEHICLE_TYPES[0]?.id || 'bike');
+  const [selectedVehicle, setSelectedVehicle] = useState('bike');
 
   // Feedback toast
   const [toastVisible, setToastVisible] = useState(false);
@@ -75,6 +84,13 @@ export default function BookScreen() {
 
   const searchInputRef = useRef(null);
   const debounceTimerRef = useRef(null);
+  const hasRequestedLocationRef = useRef(false);
+
+  useEffect(() => {
+    if (permissionStatus !== 'undetermined' || hasRequestedLocationRef.current) return;
+    hasRequestedLocationRef.current = true;
+    requestLocation();
+  }, [permissionStatus, requestLocation]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -88,7 +104,35 @@ export default function BookScreen() {
     }
   }, [shouldAutoFocus]);
 
-  // Debounced search query
+  // Live distance from Pickup to current Drop pin
+  const pickerDistKm = useMemo(() => {
+    if (!pickerCoords || !origin) return null;
+    const dLat = (pickerCoords.lat - origin.latitude) * 111;
+    const dLon =
+      (pickerCoords.lng - origin.longitude) *
+      111 *
+      Math.cos((origin.latitude * Math.PI) / 180);
+    return +Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
+  }, [pickerCoords, origin]);
+
+  // Prevent user from selecting Pickup as Drop point (< 200m)
+  const isTooClose = pickerDistKm !== null && pickerDistKm < 0.2;
+
+  // Real-time Rapido fare estimate for the picker banner
+  const estPickerFare = useMemo(() => {
+    if (pickerDistKm === null || pickerDistKm < 0.2) return null;
+    const bike = Math.max(
+      25,
+      Math.round(25 + Math.max(0, pickerDistKm - 1.5) * 9 + pickerDistKm * 3 * 1.0 + 3)
+    );
+    const auto = Math.max(
+      35,
+      Math.round(35 + Math.max(0, pickerDistKm - 1.5) * 13 + pickerDistKm * 3 * 1.25 + 4)
+    );
+    return { bike, auto };
+  }, [pickerDistKm]);
+
+  // Debounced search query for autocomplete
   const handleSearchChange = (text) => {
     setSearchQuery(text);
     if (debounceTimerRef.current) {
@@ -134,7 +178,6 @@ export default function BookScreen() {
         [start.latitude, start.longitude],
         [end.latitude, end.longitude],
       ]);
-      // Approx straight line distance
       const dLat = (end.latitude - start.latitude) * 111;
       const dLon = (end.longitude - start.longitude) * 111;
       const dist = +Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
@@ -148,32 +191,95 @@ export default function BookScreen() {
   }, []);
 
   // Select place from autocomplete
-  const handleSelectPlace = useCallback(async (place) => {
-    Keyboard.dismiss();
-    setShowSearchResults(false);
-    setSearchQuery(place.title);
-    setIsPickerMode(false);
+  const handleSelectPlace = useCallback(
+    async (place) => {
+      Keyboard.dismiss();
+      setShowSearchResults(false);
+      setSearchQuery(place.title);
+      setIsPickerMode(false);
+      setFlyToCoords(null);
 
-    const dest = {
-      latitude: place.latitude,
-      longitude: place.longitude,
-      title: place.title,
-      subtitle: place.subtitle,
-    };
-    setDestination(dest);
-    await calculateRoute(origin, dest);
-  }, [origin, calculateRoute]);
+      const dest = {
+        latitude: place.latitude,
+        longitude: place.longitude,
+        title: place.title,
+        subtitle: place.subtitle,
+      };
+      setDestination(dest);
+      await calculateRoute(origin, dest);
+    },
+    [origin, calculateRoute]
+  );
+
+  // Reverse-geocode live address while dragging/panning the map
+  const fetchPickerAddress = useCallback(async (lat, lng) => {
+    if (!lat || !lng) return;
+    setPickerAddressLoading(true);
+    try {
+      const geo = await reverseGeocode(lat, lng);
+      setPickerAddress(
+        geo.title ? `${geo.title}${geo.subtitle ? ', ' + geo.subtitle : ''}` : 'Pinned Location'
+      );
+    } catch {
+      setPickerAddress('Selected Drop Point');
+    } finally {
+      setPickerAddressLoading(false);
+    }
+  }, []);
+
+  // Center change listener for picker mode (invoked on map moveend)
+  const handleCenterChange = useCallback(
+    (coords) => {
+      setPickerCoords(coords);
+      if (pickerDebounceRef.current) clearTimeout(pickerDebounceRef.current);
+      pickerDebounceRef.current = setTimeout(() => {
+        fetchPickerAddress(coords.lat, coords.lng);
+      }, 300);
+    },
+    [fetchPickerAddress]
+  );
+
+  // Toggle Pin Drop mode
+  const togglePickerMode = useCallback(() => {
+    const next = !isPickerMode;
+    setIsPickerMode(next);
+    setShowSearchResults(false);
+    Keyboard.dismiss();
+    if (next) {
+      // Start at existing destination if set; otherwise offset by ~1.2 km from origin
+      // so it NEVER starts at or overlaps with the Pickup point!
+      const initial = destination
+        ? { lat: destination.latitude, lng: destination.longitude }
+        : {
+            lat: +(origin.latitude + 0.009).toFixed(6),
+            lng: +(origin.longitude + 0.009).toFixed(6),
+          };
+      setPickerCoords(initial);
+      setFlyToCoords({ lat: initial.lat, lng: initial.lng, timestamp: Date.now() });
+      fetchPickerAddress(initial.lat, initial.lng);
+    } else {
+      setFlyToCoords(null);
+    }
+  }, [isPickerMode, destination, origin, fetchPickerAddress]);
 
   // Confirm pin picker
   const handleConfirmPicker = async () => {
-    if (!pickerCoords) return;
+    if (isTooClose) {
+      showToast('Please drag the map to choose a drop point away from pickup');
+      return;
+    }
+    const target = pickerCoords || {
+      lat: +(origin.latitude + 0.009).toFixed(6),
+      lng: +(origin.longitude + 0.009).toFixed(6),
+    };
     setIsPickerMode(false);
+    setFlyToCoords(null);
     try {
-      const geo = await reverseGeocode(pickerCoords.lat, pickerCoords.lng);
+      const geo = await reverseGeocode(target.lat, target.lng);
       const dest = {
-        latitude: pickerCoords.lat,
-        longitude: pickerCoords.lng,
-        title: geo.title || 'Pinned Location',
+        latitude: target.lat,
+        longitude: target.lng,
+        title: geo.title || pickerAddress || 'Drop Location',
         subtitle: geo.subtitle,
       };
       setDestination(dest);
@@ -181,16 +287,17 @@ export default function BookScreen() {
       await calculateRoute(origin, dest);
     } catch {
       const dest = {
-        latitude: pickerCoords.lat,
-        longitude: pickerCoords.lng,
-        title: 'Pinned Location',
+        latitude: target.lat,
+        longitude: target.lng,
+        title: pickerAddress || 'Drop Location',
       };
       setDestination(dest);
+      setSearchQuery(dest.title);
       await calculateRoute(origin, dest);
     }
   };
 
-  // Map markers
+  // Map markers: always show Pickup; show Drop only when confirmed (not during picker mode)
   const markers = useMemo(() => {
     const list = [
       {
@@ -200,7 +307,7 @@ export default function BookScreen() {
         color: '#0F7A56',
       },
     ];
-    if (destination) {
+    if (destination && !isPickerMode) {
       list.push({
         lat: destination.latitude,
         lng: destination.longitude,
@@ -209,50 +316,93 @@ export default function BookScreen() {
       });
     }
     return list;
-  }, [origin, destination]);
+  }, [origin, destination, isPickerMode]);
 
-  // Map fit bounds
+  // Map fit bounds: fit Pickup and Drop once confirmed
   const fitBounds = useMemo(() => {
-    if (!destination) return null;
+    if (!destination || isPickerMode) return null;
     return [
       [origin.latitude, origin.longitude],
       [destination.latitude, destination.longitude],
     ];
-  }, [origin, destination]);
+  }, [origin, destination, isPickerMode]);
 
-  // Compute fares
+  // Compute fares using Rapido pricing formula
   const distance = routeInfo?.distanceKm || 0;
+  const duration = routeInfo?.durationMins || 0;
   const fares = useMemo(() => {
-    return VEHICLE_TYPES.map((v) => {
-      let fare = v.baseFare + Math.round(v.perKm * distance);
-      if (isCarpool) {
-        // Carpool split (approx 40% discount)
-        fare = Math.round(fare * 0.6);
-      }
-      return {
-        ...v,
-        fare: Math.max(v.baseFare, fare),
-      };
-    });
-  }, [distance, isCarpool]);
+    return calculateAllFares(distance, duration, isCarpool);
+  }, [distance, duration, isCarpool]);
+
+  const selectedFareObj = useMemo(() => {
+    return fares.find((f) => f.id === selectedVehicle) || fares[0];
+  }, [fares, selectedVehicle]);
 
   return (
     <View style={styles.container}>
       {/* Full-screen Leaflet Map */}
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, zIndex: 0 }]}>
         <LeafletMap
           center={{ lat: origin.latitude, lng: origin.longitude }}
           zoom={14}
           markers={markers}
-          route={routeCoords}
+          route={isPickerMode ? [] : routeCoords}
           pickerMode={isPickerMode}
-          onCenterChange={(c) => setPickerCoords(c)}
+          flyTo={flyToCoords}
+          onCenterChange={handleCenterChange}
+          onDraggingChange={setIsMapDragging}
           fitBounds={fitBounds}
         />
       </View>
 
+      {/* Floating Center Pin Overlay (Rapido & Uber style) */}
+      {isPickerMode && (
+        <View style={styles.centerPinWrapper} pointerEvents="none">
+          <View style={styles.centerTooltip}>
+            <Text style={styles.centerTooltipText}>Drop Location</Text>
+            <Text style={styles.centerTooltipSub}>Drag map or tap to move</Text>
+          </View>
+          <View
+            style={[
+              styles.centerPinIconWrap,
+              isMapDragging && styles.centerPinIconWrapLifted,
+            ]}
+          >
+            <Ionicons name="location" size={44} color="#EF4444" />
+            <View style={styles.centerPinDot} />
+          </View>
+          <View
+            style={[
+              styles.centerPinShadow,
+              isMapDragging && styles.centerPinShadowShrunk,
+            ]}
+          />
+        </View>
+      )}
+
+      {/* Recenter Near Pickup Button in Picker Mode */}
+      {isPickerMode && (
+        <TouchableOpacity
+          style={styles.recenterBtn}
+          onPress={() => {
+            const near = {
+              lat: +(origin.latitude + 0.009).toFixed(6),
+              lng: +(origin.longitude + 0.009).toFixed(6),
+              timestamp: Date.now(),
+            };
+            setFlyToCoords(near);
+            setPickerCoords(near);
+            fetchPickerAddress(near.lat, near.lng);
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate" size={18} color={THEME.colors.primary} />
+          <Text style={styles.recenterBtnText}>Near Pickup</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Top Header Card */}
-      <SafeAreaView edges={['top']} style={styles.topContainer}>
+      <SafeAreaView edges={['top']} style={styles.topContainer} pointerEvents="box-none">
         <View style={styles.headerBar}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -271,11 +421,7 @@ export default function BookScreen() {
           </View>
           <TouchableOpacity
             style={[styles.pinToggleBtn, isPickerMode && styles.pinToggleBtnActive]}
-            onPress={() => {
-              setIsPickerMode(!isPickerMode);
-              setShowSearchResults(false);
-              Keyboard.dismiss();
-            }}
+            onPress={togglePickerMode}
           >
             <Ionicons
               name={isPickerMode ? 'close' : 'location'}
@@ -293,15 +439,17 @@ export default function BookScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Search Input Bar */}
-        {!isPickerMode && (
+        {/* Search Input Bar or Pin Drop Banner */}
+        {!isPickerMode ? (
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color={THEME.colors.primary} style={{ marginRight: 8 }} />
             <TextInput
               ref={searchInputRef}
               style={styles.searchInput}
-              placeholder="Where to? (e.g. Airport, Railway Station)"
+              placeholder="Where to?"
               placeholderTextColor={THEME.colors.mutedText}
+              numberOfLines={1}
+              multiline={false}
               value={searchQuery}
               onChangeText={handleSearchChange}
               onFocus={() => {
@@ -323,6 +471,13 @@ export default function BookScreen() {
             {isSearching && (
               <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginLeft: 6 }} />
             )}
+          </View>
+        ) : (
+          <View style={styles.pickerModeBanner}>
+            <Ionicons name="navigate-circle" size={20} color="#065F46" style={{ marginRight: 8 }} />
+            <Text style={styles.pickerModeBannerText}>
+              Pan the map to position the pin on your drop spot
+            </Text>
           </View>
         )}
 
@@ -357,15 +512,52 @@ export default function BookScreen() {
         )}
       </SafeAreaView>
 
-      {/* Picker Mode Floating Confirm Button */}
+      {/* Picker Mode Floating Confirm Button with Live Address */}
       {isPickerMode && (
         <View style={styles.pickerConfirmWrap}>
+          <View style={styles.pickerAddressCard}>
+            <View style={styles.pickerAddressHeader}>
+              <Text style={styles.pickerAddressLabel}>Selected Drop Point</Text>
+              {pickerDistKm !== null && (
+                <Text style={[styles.pickerDistBadge, isTooClose && styles.pickerDistBadgeWarn]}>
+                  {pickerDistKm} km from pickup
+                </Text>
+              )}
+            </View>
+            <View style={styles.pickerAddressBody}>
+              <View style={[styles.pickerDot, isTooClose && { backgroundColor: '#F59E0B' }]} />
+              <Text style={styles.pickerAddressText} numberOfLines={2}>
+                {pickerAddressLoading ? 'Detecting address…' : (pickerAddress || 'Point on map')}
+              </Text>
+              {pickerAddressLoading && (
+                <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginLeft: 8 }} />
+              )}
+            </View>
+            {estPickerFare && !isTooClose && (
+              <Text style={styles.pickerFareEstimate}>
+                ⚡ Rapido Est: ₹{estPickerFare.bike} (Bike) • ₹{estPickerFare.auto} (Auto)
+              </Text>
+            )}
+            {isTooClose && (
+              <Text style={styles.pickerTooCloseWarn}>
+                ⚠️ Too close to pickup! Drag map away to select drop spot.
+              </Text>
+            )}
+          </View>
           <PressableScale
-            style={styles.confirmPinBtn}
+            style={[styles.confirmPinBtn, isTooClose && styles.confirmPinBtnDisabled]}
             onPress={handleConfirmPicker}
+            disabled={isTooClose}
           >
-            <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.confirmPinText}>Set as Drop Location</Text>
+            <Ionicons
+              name={isTooClose ? 'alert-circle' : 'checkmark-circle'}
+              size={20}
+              color="#FFFFFF"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.confirmPinText}>
+              {isTooClose ? 'Too Close to Pickup' : 'Set as Drop Location'}
+            </Text>
           </PressableScale>
         </View>
       )}
@@ -432,6 +624,22 @@ export default function BookScreen() {
             })}
           </View>
 
+          {/* Rapido Fare Breakdown Pill */}
+          {selectedFareObj && (
+            <View style={styles.fareBreakdownBox}>
+              <View style={styles.fareBreakdownHeader}>
+                <Ionicons name="flash" size={13} color="#0F7A56" />
+                <Text style={styles.fareBreakdownTitle}>
+                  Rapido Rate: Base ₹{selectedFareObj.baseFare} + ₹{selectedFareObj.perKm}/km + ₹{selectedFareObj.perMinute}/min
+                </Text>
+                <Text style={styles.fareBreakdownEta}>{selectedFareObj.etaText}</Text>
+              </View>
+              <Text style={styles.fareBreakdownFormula}>
+                Base ₹{selectedFareObj.baseFare} (first {selectedFareObj.baseKm}km) + ₹{selectedFareObj.distanceFare} distance + ₹{selectedFareObj.timeFare} ride time + ₹{selectedFareObj.platformFee} fee{isCarpool ? ` • Carpool -₹${selectedFareObj.discount}` : ''}
+              </Text>
+            </View>
+          )}
+
           {/* Book Ride Button */}
           <PressableScale
             style={styles.bookButton}
@@ -460,7 +668,88 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F4F7F5',
   },
+  centerPinWrapper: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -60,
+    marginTop: -74,
+    width: 120,
+    alignItems: 'center',
+    zIndex: 15,
+  },
+  centerTooltip: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 4,
+    alignItems: 'center',
+    ...THEME.shadows.card,
+  },
+  centerTooltipText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.bold,
+  },
+  centerTooltipSub: {
+    color: '#94A3B8',
+    fontSize: 9,
+    fontWeight: THEME.fontWeights.medium,
+  },
+  centerPinIconWrap: {
+    alignItems: 'center',
+    transform: [{ translateY: 0 }],
+  },
+  centerPinIconWrapLifted: {
+    transform: [{ translateY: -8 }],
+  },
+  centerPinDot: {
+    position: 'absolute',
+    bottom: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+  },
+  centerPinShadow: {
+    width: 14,
+    height: 5,
+    borderRadius: 7,
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    marginTop: -3,
+    transform: [{ scale: 1 }],
+  },
+  centerPinShadowShrunk: {
+    opacity: 0.4,
+    transform: [{ scale: 0.6 }],
+  },
+  recenterBtn: {
+    position: 'absolute',
+    right: 16,
+    top: 135,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    ...THEME.shadows.card,
+    zIndex: 20,
+  },
+  recenterBtnText: {
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.bold,
+    color: THEME.colors.primary,
+    marginLeft: 4,
+  },
   topContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
     paddingTop: 8,
     zIndex: 20,
@@ -481,6 +770,7 @@ const styles = StyleSheet.create({
   },
   titleWrap: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 12,
   },
   headerTitle: {
@@ -522,7 +812,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: THEME.colors.white,
     paddingHorizontal: 14,
-    height: 48,
+    height: 52,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: THEME.colors.border,
@@ -563,10 +853,76 @@ const styles = StyleSheet.create({
   },
   pickerConfirmWrap: {
     position: 'absolute',
-    bottom: 30,
-    left: 20,
-    right: 20,
+    bottom: 24,
+    left: 16,
+    right: 16,
     zIndex: 25,
+  },
+  pickerAddressCard: {
+    backgroundColor: THEME.colors.white,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    ...THEME.shadows.floating,
+  },
+  pickerAddressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  pickerAddressLabel: {
+    fontSize: 10,
+    fontWeight: THEME.fontWeights.bold,
+    color: THEME.colors.mutedText,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pickerDistBadge: {
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.bold,
+    color: '#0F7A56',
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  pickerDistBadgeWarn: {
+    color: '#B91C1C',
+    backgroundColor: '#FEE2E2',
+  },
+  pickerAddressBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pickerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    marginRight: 10,
+  },
+  pickerAddressText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: THEME.fontWeights.bold,
+    color: THEME.colors.textPrimary,
+    lineHeight: 18,
+  },
+  pickerFareEstimate: {
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.semibold,
+    color: '#0F7A56',
+    marginTop: 6,
+  },
+  pickerTooCloseWarn: {
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.bold,
+    color: '#DC2626',
+    marginTop: 6,
   },
   confirmPinBtn: {
     flexDirection: 'row',
@@ -576,6 +932,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: THEME.radius.pill,
     ...THEME.shadows.floating,
+  },
+  confirmPinBtnDisabled: {
+    backgroundColor: '#94A3B8',
   },
   confirmPinText: {
     fontSize: 15,
@@ -688,5 +1047,53 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: THEME.fontWeights.extrabold,
     color: '#FFFFFF',
+  },
+  pickerModeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E6F4EA',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 14,
+    ...THEME.shadows.card,
+  },
+  pickerModeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: THEME.fontWeights.semibold,
+    color: '#065F46',
+  },
+  fareBreakdownBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  fareBreakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  fareBreakdownTitle: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.bold,
+    color: '#0F7A56',
+  },
+  fareBreakdownEta: {
+    fontSize: 11,
+    fontWeight: THEME.fontWeights.medium,
+    color: THEME.colors.mutedText,
+  },
+  fareBreakdownFormula: {
+    fontSize: 11,
+    color: '#475569',
+    lineHeight: 15,
   },
 });

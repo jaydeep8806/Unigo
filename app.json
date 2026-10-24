@@ -15,6 +15,11 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#E6F4FE"
       },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAhnDLDlYuWtlldckHfkugI8prT07JgHTo"
+        }
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"

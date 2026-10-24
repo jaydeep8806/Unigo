@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +18,8 @@ import { reverseGeocode } from '../../services/geocoding';
 import LeafletMap from '../../components/LeafletMap';
 import PressableScale from '../../components/PressableScale';
 import Toast from '../../components/Toast';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const SERVICES = [
   { id: 'cleaning', label: 'Cleaning', icon: 'sparkles', desc: 'Home deep cleaning & sanitization' },
@@ -112,7 +115,7 @@ export default function HomeSpaScreen() {
   return (
     <View style={styles.container}>
       {/* Full Map with Center Picker Pin */}
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, zIndex: 0 }]}>
         <LeafletMap
           center={initialCenter}
           zoom={15}
@@ -122,7 +125,7 @@ export default function HomeSpaScreen() {
       </View>
 
       {/* Top Header */}
-      <SafeAreaView edges={['top']} style={styles.topContainer}>
+      <SafeAreaView edges={['top']} style={styles.topContainer} pointerEvents="box-none">
         <View style={styles.headerBar}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -231,6 +234,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F7F5',
   },
   topContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
     paddingTop: 8,
     zIndex: 20,

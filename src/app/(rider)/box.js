@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +21,8 @@ import { fetchDrivingRoute } from '../../services/osrm';
 import LeafletMap from '../../components/LeafletMap';
 import PressableScale from '../../components/PressableScale';
 import Toast from '../../components/Toast';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const SIZES = [
   { id: 'small', label: 'Small', sub: 'Up to 3 kg', extraFare: 0, icon: 'document-text-outline' },
@@ -216,7 +219,7 @@ export default function BoxScreen() {
   return (
     <View style={styles.container}>
       {/* Full Map */}
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, zIndex: 0 }]}>
         <LeafletMap
           center={{ lat: origin.latitude, lng: origin.longitude }}
           zoom={14}
@@ -229,7 +232,7 @@ export default function BoxScreen() {
       </View>
 
       {/* Top Header Card */}
-      <SafeAreaView edges={['top']} style={styles.topContainer}>
+      <SafeAreaView edges={['top']} style={styles.topContainer} pointerEvents="box-none">
         <View style={styles.headerBar}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -416,6 +419,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F7F5',
   },
   topContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
     paddingTop: 8,
     zIndex: 20,
