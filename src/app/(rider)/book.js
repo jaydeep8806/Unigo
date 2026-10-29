@@ -69,7 +69,7 @@ export default function BookScreen() {
 
   // Active search field: 'pickup' | 'drop'
   const [activeSearchField, setActiveSearchField] = useState('drop');
-  const [pickupQuery, setPickupQuery] = useState('');
+  const [pickupQuery, setPickupQuery] = useState(defaultOrigin?.title || '');
   const [dropQuery, setDropQuery] = useState('');
 
   const [searchResults, setSearchResults] = useState([]);
@@ -531,7 +531,7 @@ export default function BookScreen() {
                   ]}
                   placeholder="Enter pickup location"
                   placeholderTextColor={THEME.colors.mutedText}
-                  value={pickupQuery || origin?.title || ''}
+                  value={pickupQuery}
                   onFocus={() => {
                     setActiveSearchField('pickup');
                     if (searchResults.length > 0) setShowSearchResults(true);
@@ -565,7 +565,7 @@ export default function BookScreen() {
                   ]}
                   placeholder="Where to? (Destination)"
                   placeholderTextColor={THEME.colors.mutedText}
-                  value={dropQuery || destination?.title || ''}
+                  value={dropQuery}
                   onFocus={() => {
                     setActiveSearchField('drop');
                     if (searchResults.length > 0) setShowSearchResults(true);
