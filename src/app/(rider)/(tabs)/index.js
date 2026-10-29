@@ -43,7 +43,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_H_PAD = 16;
 const GRID_GAP = 10;
 const TILE_W = (SCREEN_WIDTH - GRID_H_PAD * 2 - GRID_GAP * 3) / 4;
-const TILE_H = 92;
 
 // ── Info-card width: show part of the 3rd card ───────────────────────
 const INFO_CARD_W = SCREEN_WIDTH * 0.42;
@@ -186,12 +185,15 @@ export default function RiderHomeScreen() {
         </View>
       ) : null}
 
-      {/* Illustration */}
-      <Image
-        source={service.image}
-        style={styles.tileImage}
-        contentFit="contain"
-      />
+      {/* Illustration container */}
+      <View style={styles.tileIconContainer}>
+        <Image
+          source={service.image}
+          style={styles.tileImage}
+          contentFit="contain"
+          transition={200}
+        />
+      </View>
 
       {/* Label */}
       <Text style={styles.tileLabel} numberOfLines={1}>
@@ -263,12 +265,12 @@ export default function RiderHomeScreen() {
             accessibilityLabel="Search destination"
           >
             <View style={styles.searchIconBox}>
-              <Ionicons name="search" size={20} color={THEME.colors.primary} />
+              <Ionicons name="search" size={18} color={THEME.colors.primary} />
             </View>
-            <Text style={styles.searchPlaceholder}>Type to search</Text>
-            {/* <View style={styles.bookPill}>
-              <Text style={styles.bookPillText}>Book Ride</Text>
-            </View> */}
+            <Text style={styles.searchPlaceholder}>Where to?</Text>
+            <View style={styles.bookPill}>
+              <Text style={styles.bookPillText}>Ride Now</Text>
+            </View>
           </PressableScale>
         </LinearGradient>
 
@@ -617,13 +619,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: THEME.colors.white,
-    borderRadius: THEME.radius.card,
-    height: 54,
-    paddingHorizontal: 14,
-    ...THEME.shadows.card,
+    borderRadius: 16,
+    height: 52,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
   },
   searchIconBox: {
-    marginRight: 10,
+    marginRight: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchPlaceholder: {
     flex: 1,
@@ -632,47 +644,52 @@ const styles = StyleSheet.create({
     color: THEME.colors.text,
   },
   bookPill: {
-    backgroundColor: THEME.colors.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: THEME.radius.pill,
   },
   bookPillText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: THEME.fontWeights.bold,
-    color: THEME.colors.primaryDark,
+    color: '#FFFFFF',
   },
 
   // ── Sections ─────────────────────────────────────────────────────────
   sectionWrapper: {
     paddingHorizontal: 16,
-    marginTop: 16,
+    marginTop: 20,
   },
   sectionTitleHeader: {
-    fontSize: 17,
-    fontWeight: THEME.fontWeights.bold,
+    fontSize: 18,
+    fontWeight: THEME.fontWeights.extrabold,
     color: THEME.colors.text,
     marginBottom: 12,
+    letterSpacing: -0.3,
   },
 
   // ── b. Services grid (white sheet overlapping header) ────────────────
   servicesSheetWrapper: {
     paddingHorizontal: 16,
-    marginTop: -14, // overlap bottom of the gradient header
+    marginTop: -20, // overlap bottom of the gradient header
   },
   servicesSheet: {
     backgroundColor: THEME.colors.white,
     borderRadius: 24,
-    paddingTop: 18,
-    paddingBottom: 20,
+    paddingTop: 20,
+    paddingBottom: 22,
     paddingHorizontal: GRID_H_PAD,
-    ...THEME.shadows.card,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -692,52 +709,70 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: TILE_W,
-    height: TILE_H,
-    backgroundColor: '#F0F4F2',
-    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    position: 'relative',
+  },
+  tileIconContainer: {
+    width: TILE_W * 0.85,
+    height: TILE_W * 0.85,
+    maxWidth: 62,
+    maxHeight: 62,
+    backgroundColor: '#F3F6F4',
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    paddingTop: 6,
-    paddingBottom: 6,
+    marginBottom: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 122, 86, 0.08)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  tileImage: {
+    width: '72%',
+    height: '72%',
   },
   tileBadge: {
     position: 'absolute',
-    top: 4,
-    alignSelf: 'center',
+    top: -6,
+    right: 2,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: THEME.radius.pill,
-    zIndex: 2,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   tileBadgePopular: {
     backgroundColor: THEME.colors.primary,
   },
   tileBadgeDiscount: {
-    backgroundColor: THEME.colors.accent,
+    backgroundColor: '#E11D48',
   },
   tileBadgeNew: {
-    backgroundColor: THEME.colors.accent,
+    backgroundColor: '#F59E0B',
   },
   tileBadgeText: {
-    fontSize: 8,
-    fontWeight: THEME.fontWeights.bold,
+    fontSize: 8.5,
+    fontWeight: THEME.fontWeights.extrabold,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   tileBadgeTextDark: {
-    color: THEME.colors.primaryDark,
-  },
-  tileImage: {
-    width: 44,
-    height: 44,
-    marginBottom: 4,
+    color: '#FFFFFF',
   },
   tileLabel: {
-    fontSize: 11,
-    fontWeight: THEME.fontWeights.bold,
+    fontSize: 11.5,
+    fontWeight: THEME.fontWeights.semibold,
     color: THEME.colors.text,
     textAlign: 'center',
+    letterSpacing: -0.1,
   },
 
   // ── c. City Card ─────────────────────────────────────────────────────

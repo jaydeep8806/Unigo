@@ -62,7 +62,7 @@ export default function LocationPermissionScreen() {
         <View style={styles.heroContainer}>
           <View style={styles.heroOuterCircle}>
             <View style={styles.heroInnerCircle}>
-              <Ionicons name="location" size={54} color={THEME.colors.primary} />
+              <Ionicons name="location" size={48} color={THEME.colors.white} />
             </View>
           </View>
         </View>
@@ -200,37 +200,48 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.colors.primaryLight,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(15, 122, 86, 0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: THEME.radius.full,
     gap: 6,
   },
   badgeText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: THEME.colors.primaryDark,
+    color: THEME.colors.primary,
+    letterSpacing: 0.3,
   },
   heroContainer: {
-    marginBottom: 28,
+    marginBottom: 32,
   },
   heroOuterCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: '#F0FDF4',
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    backgroundColor: '#ECFDF5',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
+    borderWidth: 8,
+    borderColor: '#D1FAE5',
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
   },
   heroInnerCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: THEME.colors.primaryLight,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: THEME.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   textContainer: {
     alignItems: 'center',
@@ -287,12 +298,16 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: THEME.colors.primary,
-    height: 52,
-    borderRadius: THEME.radius.md,
+    height: 54,
+    borderRadius: THEME.radius.full,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
-    ...THEME.shadows.card,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
   primaryButtonDisabled: {
     opacity: 0.7,
@@ -305,15 +320,17 @@ const styles = StyleSheet.create({
     color: THEME.colors.white,
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.2,
   },
   secondaryButton: {
-    height: 44,
+    height: 46,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: THEME.radius.full,
   },
   secondaryButtonText: {
     color: THEME.colors.primary,
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '600',
   },
   modalOverlay: {
