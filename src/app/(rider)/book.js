@@ -41,12 +41,11 @@ export default function BookScreen() {
   const [bookingInProgress, setBookingInProgress] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
 
-  // Active user origin (strictly within India)
-  const origin = useMemo(() => {
+  // Active user origin (customizable by user or defaulted to GPS/City)
+  const defaultOrigin = useMemo(() => {
     if (coordinates && coordinates.latitude && coordinates.longitude) {
       const lat = coordinates.latitude;
       const lng = coordinates.longitude;
-      // Only use GPS coordinates if they are inside India
       if (lat >= 6.0 && lat <= 38.5 && lng >= 68.0 && lng <= 98.0) {
         return {
           latitude: lat,
@@ -63,9 +62,16 @@ export default function BookScreen() {
     };
   }, [coordinates, selectedCity]);
 
-  // Destination state
+  // Dual origin and destination states
+  const [customOrigin, setCustomOrigin] = useState(null);
+  const origin = customOrigin || defaultOrigin;
   const [destination, setDestination] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+
+  // Active search field: 'pickup' | 'drop'
+  const [activeSearchField, setActiveSearchField] = useState('drop');
+  const [pickupQuery, setPickupQuery] = useState('');
+  const [dropQuery, setDropQuery] = useState('');
+
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -139,9 +145,14 @@ export default function BookScreen() {
     return { bike, auto };
   }, [pickerDistKm]);
 
-  // Debounced search query for autocomplete
-  const handleSearchChange = (text) => {
-    setSearchQuery(text);
+  // Debounced search query for autocomplete (pickup or drop)
+  const handleSearchChange = (text, field = activeSearchField) => {
+    if (field === 'pickup') {
+      setPickupQuery(text);
+    } else {
+      setDropQuery(text);
+    }
+
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
@@ -202,21 +213,41 @@ export default function BookScreen() {
     async (place) => {
       Keyboard.dismiss();
       setShowSearchResults(false);
-      setSearchQuery(place.title);
       setIsPickerMode(false);
       setFlyToCoords(null);
 
-      const dest = {
+      const selectedLoc = {
         latitude: place.latitude,
         longitude: place.longitude,
         title: place.title,
         subtitle: place.subtitle,
       };
-      setDestination(dest);
-      await calculateRoute(origin, dest);
+
+      if (activeSearchField === 'pickup') {
+        setCustomOrigin(selectedLoc);
+        setPickupQuery(place.title);
+        if (destination) {
+          await calculateRoute(selectedLoc, destination);
+        }
+      } else {
+        setDestination(selectedLoc);
+        setDropQuery(place.title);
+        await calculateRoute(origin, selectedLoc);
+      }
     },
-    [origin, calculateRoute]
+    [activeSearchField, destination, origin, calculateRoute]
   );
+
+  // Swap pickup and drop
+  const handleSwapLocations = useCallback(() => {
+    if (!destination) return;
+    const tempOrigin = origin;
+    setCustomOrigin(destination);
+    setPickupQuery(destination.title);
+    setDestination(tempOrigin);
+    setDropQuery(tempOrigin.title);
+    calculateRoute(destination, tempOrigin);
+  }, [origin, destination, calculateRoute]);
 
   // Reverse-geocode live address while dragging/panning the map
   const fetchPickerAddress = useCallback(async (lat, lng) => {
@@ -290,7 +321,7 @@ export default function BookScreen() {
         subtitle: geo.subtitle,
       };
       setDestination(dest);
-      setSearchQuery(dest.title);
+      setDropQuery(dest.title);
       await calculateRoute(origin, dest);
     } catch {
       const dest = {
@@ -299,7 +330,7 @@ export default function BookScreen() {
         title: pickerAddress || 'Drop Location',
       };
       setDestination(dest);
-      setSearchQuery(dest.title);
+      setDropQuery(dest.title);
       await calculateRoute(origin, dest);
     }
   };
@@ -481,38 +512,95 @@ export default function BookScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Search Input Bar or Pin Drop Banner */}
+        {/* Professional Dual Search Panel: FROM (Pickup) -> TO (Drop) */}
         {!isPickerMode ? (
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={THEME.colors.primary} style={{ marginRight: 8 }} />
-            <TextInput
-              ref={searchInputRef}
-              style={styles.searchInput}
-              placeholder="Where to?"
-              placeholderTextColor={THEME.colors.mutedText}
-              numberOfLines={1}
-              multiline={false}
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-              onFocus={() => {
-                if (searchResults.length > 0) setShowSearchResults(true);
-              }}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
+          <View style={styles.dualSearchCard}>
+            <View style={styles.dualSearchTimeline}>
+              <View style={styles.pickupDot} />
+              <View style={styles.timelineLine} />
+              <View style={styles.dropSquare} />
+            </View>
+
+            <View style={styles.dualSearchInputsCol}>
+              {/* Pickup Input */}
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[
+                    styles.searchInput,
+                    activeSearchField === 'pickup' && styles.searchInputActive,
+                  ]}
+                  placeholder="Enter pickup location"
+                  placeholderTextColor={THEME.colors.mutedText}
+                  value={pickupQuery || origin?.title || ''}
+                  onFocus={() => {
+                    setActiveSearchField('pickup');
+                    if (searchResults.length > 0) setShowSearchResults(true);
+                  }}
+                  onChangeText={(text) => handleSearchChange(text, 'pickup')}
+                  returnKeyType="search"
+                />
+                {pickupQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPickupQuery('');
+                      setCustomOrigin(null);
+                      setSearchResults([]);
+                    }}
+                    style={styles.clearBtn}
+                  >
+                    <Ionicons name="close-circle" size={16} color={THEME.colors.mutedText} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.searchDivider} />
+
+              {/* Drop Input */}
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  ref={searchInputRef}
+                  style={[
+                    styles.searchInput,
+                    activeSearchField === 'drop' && styles.searchInputActive,
+                  ]}
+                  placeholder="Where to? (Destination)"
+                  placeholderTextColor={THEME.colors.mutedText}
+                  value={dropQuery || destination?.title || ''}
+                  onFocus={() => {
+                    setActiveSearchField('drop');
+                    if (searchResults.length > 0) setShowSearchResults(true);
+                  }}
+                  onChangeText={(text) => handleSearchChange(text, 'drop')}
+                  returnKeyType="search"
+                />
+                {dropQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setDropQuery('');
+                      setDestination(null);
+                      setSearchResults([]);
+                    }}
+                    style={styles.clearBtn}
+                  >
+                    <Ionicons name="close-circle" size={16} color={THEME.colors.mutedText} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Swap & Spinner Action Column */}
+            <View style={styles.searchActionsCol}>
               <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  setShowSearchResults(false);
-                }}
+                style={styles.swapBtn}
+                onPress={handleSwapLocations}
+                accessibilityLabel="Swap pickup and drop"
               >
-                <Ionicons name="close-circle" size={18} color={THEME.colors.mutedText} />
+                <Ionicons name="swap-vertical" size={18} color={THEME.colors.primary} />
               </TouchableOpacity>
-            )}
-            {isSearching && (
-              <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginLeft: 6 }} />
-            )}
+              {isSearching && (
+                <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginTop: 6 }} />
+              )}
+            </View>
           </View>
         ) : (
           <View style={styles.pickerModeBanner}>
@@ -1055,22 +1143,85 @@ const styles = StyleSheet.create({
   pinToggleTextActive: {
     color: '#FFFFFF',
   },
-  searchBar: {
+  dualSearchCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: THEME.colors.white,
     paddingHorizontal: 14,
-    height: 52,
-    borderRadius: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
-    ...THEME.shadows.card,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dualSearchTimeline: {
+    alignItems: 'center',
+    marginRight: 10,
+    paddingVertical: 8,
+  },
+  pickupDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10B981',
+  },
+  timelineLine: {
+    width: 2,
+    height: 22,
+    backgroundColor: '#CBD5E1',
+    marginVertical: 4,
+  },
+  dropSquare: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: '#EF4444',
+  },
+  dualSearchInputsCol: {
+    flex: 1,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 38,
+  },
+  searchDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 2,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '500',
     color: THEME.colors.textPrimary,
+    paddingVertical: 0,
+  },
+  searchInputActive: {
+    fontWeight: '700',
+    color: THEME.colors.primaryDark,
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  searchActionsCol: {
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingLeft: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: '#F1F5F9',
+  },
+  swapBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   resultsCard: {
     backgroundColor: THEME.colors.white,
