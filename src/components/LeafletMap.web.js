@@ -206,32 +206,59 @@ export default function LeafletMapWeb({
     layer.clearLayers();
 
     if (route && route.length >= 2) {
-      const coords = route.map((pt) => [pt.latitude || pt.lat, pt.longitude || pt.lng]);
-      
-      // Outer glow polyline
-      L.polyline(coords, {
-        color: '#064E3B',
-        weight: 7,
-        opacity: 0.35,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(layer);
+      const coords = route
+        .map((pt) => {
+          if (Array.isArray(pt)) {
+            const lat = Number(pt[0]);
+            const lng = Number(pt[1]);
+            return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+          }
+          const lat = Number(pt.latitude ?? pt.lat);
+          const lng = Number(pt.longitude ?? pt.lng);
+          return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+        })
+        .filter(Boolean);
 
-      // Inner crisp route polyline
-      const polyline = L.polyline(coords, {
-        color: THEME.colors.primary,
-        weight: 4.5,
-        opacity: 0.95,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(layer);
+      if (coords.length >= 2) {
+        // Outer glow polyline
+        L.polyline(coords, {
+          color: '#064E3B',
+          weight: 7,
+          opacity: 0.35,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(layer);
 
-      if (fitBounds) {
-        map.fitBounds(polyline.getBounds(), {
-          padding: [40, 40],
-          maxZoom: 16,
-          animate: true,
-        });
+        // Inner crisp route polyline
+        const polyline = L.polyline(coords, {
+          color: THEME.colors.primary,
+          weight: 4.5,
+          opacity: 0.95,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(layer);
+
+        try {
+          const bounds = polyline.getBounds();
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, {
+              padding: [50, 50],
+              maxZoom: 16,
+              animate: true,
+            });
+          }
+        } catch (e) {
+          console.warn('[LeafletMap.web] fitBounds error:', e);
+        }
+      }
+    } else if (fitBounds && Array.isArray(fitBounds) && fitBounds.length >= 2) {
+      try {
+        const bounds = L.latLngBounds(fitBounds);
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
+        }
+      } catch (e) {
+        console.warn('[LeafletMap.web] fitBounds array error:', e);
       }
     }
   }, [route, fitBounds]);
