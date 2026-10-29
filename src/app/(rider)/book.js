@@ -14,6 +14,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocation } from '../../context/LocationProvider';
+import { useWallet } from '../../context/WalletProvider';
+import { useActivity } from '../../context/ActivityProvider';
 import { THEME } from '../../constants/theme';
 import { CURRENCY_SYMBOL, DEFAULT_CITY } from '../../constants/config';
 import { searchLocations, reverseGeocode } from '../../services/geocoding';
@@ -33,6 +35,11 @@ export default function BookScreen() {
   const shouldAutoFocus = params.autoFocus === 'true';
 
   const { coordinates, selectedCity, permissionStatus, requestLocation } = useLocation();
+  const { addRide } = useActivity();
+  const { deductMoney, balance } = useWallet();
+
+  const [bookingInProgress, setBookingInProgress] = useState(false);
+  const [confirmedBooking, setConfirmedBooking] = useState(null);
 
   // Active user origin (strictly within India)
   const origin = useMemo(() => {
@@ -337,6 +344,41 @@ export default function BookScreen() {
   const selectedFareObj = useMemo(() => {
     return fares.find((f) => f.id === selectedVehicle) || fares[0];
   }, [fares, selectedVehicle]);
+
+  const handleConfirmRide = async () => {
+    if (!destination || !selectedFareObj) return;
+
+    setBookingInProgress(true);
+    try {
+      const fareAmount = selectedFareObj.totalFare || selectedFareObj.baseFare || 50;
+
+      // Deduct from wallet if sufficient balance, else cash
+      let paymentType = 'Cash';
+      if (balance >= fareAmount) {
+        const paid = await deductMoney(fareAmount, `Ride to ${destination.title}`);
+        if (paid) paymentType = 'UniGo Wallet';
+      }
+
+      const ride = await addRide({
+        origin: origin.title,
+        destination: destination.title,
+        vehicleId: selectedVehicle,
+        vehicleName: selectedFareObj.name,
+        fare: fareAmount,
+        distanceKm: distance,
+        durationMins: duration,
+        paymentType,
+        isCarpool,
+      });
+
+      setConfirmedBooking(ride);
+      showToast('Ride booked successfully! 🎉');
+    } catch {
+      showToast('Could not complete booking. Please try again.');
+    } finally {
+      setBookingInProgress(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -643,13 +685,82 @@ export default function BookScreen() {
           {/* Book Ride Button */}
           <PressableScale
             style={styles.bookButton}
-            onPress={() => showToast('Booking coming soon')}
+            onPress={handleConfirmRide}
+            disabled={bookingInProgress}
           >
-            <Text style={styles.bookButtonText}>
-              {isCarpool ? 'Find Carpool Match' : 'Book Ride'}
-            </Text>
-            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+            {bookingInProgress ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Text style={styles.bookButtonText}>
+                  {isCarpool ? 'Find Carpool Match' : `Book ${selectedFareObj?.name || 'Ride'}`} • ₹{selectedFareObj?.totalFare || 50}
+                </Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              </>
+            )}
           </PressableScale>
+        </View>
+      )}
+
+      {/* Confirmed Ride Driver Arrival Modal */}
+      {confirmedBooking && (
+        <View style={styles.driverModalOverlay}>
+          <View style={styles.driverCard}>
+            <View style={styles.driverCardHeader}>
+              <View style={styles.otpPill}>
+                <Text style={styles.otpLabel}>START OTP</Text>
+                <Text style={styles.otpCode}>{confirmedBooking.otp}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setConfirmedBooking(null);
+                  router.push('/(rider)/(tabs)/activities');
+                }}
+                style={styles.closeDriverCardBtn}
+              >
+                <Ionicons name="close" size={20} color={THEME.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.driverProfileRow}>
+              <View style={styles.driverAvatar}>
+                <Ionicons name="person" size={28} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.driverName}>{confirmedBooking.driver?.name}</Text>
+                <Text style={styles.driverRating}>
+                  ⭐ {confirmedBooking.driver?.rating} ({confirmedBooking.driver?.trips} trips)
+                </Text>
+                <Text style={styles.vehicleNumber}>{confirmedBooking.driver?.vehicleNumber}</Text>
+              </View>
+              <View style={styles.driverEtaBox}>
+                <Text style={styles.driverEtaTime}>3 min</Text>
+                <Text style={styles.driverEtaSub}>Arriving in</Text>
+              </View>
+            </View>
+
+            <View style={styles.driverTripSummary}>
+              <Text style={styles.tripSummaryRow} numberOfLines={1}>
+                📍 <Text style={{ fontWeight: '700' }}>To:</Text> {confirmedBooking.destination}
+              </Text>
+              <Text style={styles.tripSummaryFare}>
+                Fare: ₹{confirmedBooking.fare} ({confirmedBooking.paymentType})
+              </Text>
+            </View>
+
+            <View style={styles.driverActionButtons}>
+              <TouchableOpacity
+                style={styles.trackRideBtn}
+                onPress={() => {
+                  setConfirmedBooking(null);
+                  router.push('/(rider)/(tabs)/activities');
+                }}
+              >
+                <Ionicons name="receipt-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.trackRideText}>View In Activities</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       )}
 
@@ -667,6 +778,143 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F4F7F5',
+  },
+  driverModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+    zIndex: 100,
+  },
+  driverCard: {
+    backgroundColor: THEME.colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  driverCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  otpPill: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: THEME.radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  otpLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.colors.primary,
+    letterSpacing: 0.5,
+  },
+  otpCode: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: THEME.colors.primaryDark,
+    letterSpacing: 2,
+  },
+  closeDriverCardBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  driverProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  driverAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: THEME.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  driverRating: {
+    fontSize: 12,
+    color: '#D97706',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  vehicleNumber: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.primary,
+    marginTop: 2,
+  },
+  driverEtaBox: {
+    alignItems: 'flex-end',
+  },
+  driverEtaTime: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.colors.primary,
+  },
+  driverEtaSub: {
+    fontSize: 10,
+    color: THEME.colors.textSecondary,
+    fontWeight: '600',
+  },
+  driverTripSummary: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+  },
+  tripSummaryRow: {
+    fontSize: 13,
+    color: THEME.colors.textPrimary,
+    marginBottom: 4,
+  },
+  tripSummaryFare: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
+  },
+  driverActionButtons: {
+    marginTop: 16,
+  },
+  trackRideBtn: {
+    backgroundColor: THEME.colors.primary,
+    height: 48,
+    borderRadius: THEME.radius.full,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  trackRideText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   centerPinWrapper: {
     position: 'absolute',

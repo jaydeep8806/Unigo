@@ -14,6 +14,8 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocation } from '../../context/LocationProvider';
+import { useWallet } from '../../context/WalletProvider';
+import { useActivity } from '../../context/ActivityProvider';
 import { THEME } from '../../constants/theme';
 import { CURRENCY_SYMBOL, DEFAULT_CITY } from '../../constants/config';
 import { searchLocations, reverseGeocode } from '../../services/geocoding';
@@ -34,6 +36,9 @@ export default function BoxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { coordinates, selectedCity } = useLocation();
+  const { addRide } = useActivity();
+  const { deductMoney, balance } = useWallet();
+  const [isSending, setIsSending] = useState(false);
 
   // Active user origin (strictly within India)
   const origin = useMemo(() => {
@@ -395,10 +400,44 @@ export default function BoxScreen() {
 
           <PressableScale
             style={styles.sendButton}
-            onPress={() => showToast('UniGo Box is coming soon!')}
+            disabled={isSending}
+            onPress={async () => {
+              if (!destination) return;
+              setIsSending(true);
+              try {
+                let paymentType = 'Cash';
+                if (balance >= totalFare) {
+                  const paid = await deductMoney(totalFare, `Courier to ${destination.title}`);
+                  if (paid) paymentType = 'UniGo Wallet';
+                }
+
+                await addRide({
+                  origin: origin.title,
+                  destination: destination.title,
+                  vehicleName: `UniGo Box (${selectedSize.toUpperCase()})`,
+                  fare: totalFare,
+                  distanceKm: distanceKm || 2.5,
+                  durationMins: durationMins || 15,
+                  paymentType,
+                });
+
+                showToast('Parcel delivery booked! Courier assigned. 📦');
+                setTimeout(() => router.push('/(rider)/(tabs)/activities'), 1200);
+              } catch {
+                showToast('Could not schedule delivery. Please try again.');
+              } finally {
+                setIsSending(false);
+              }
+            }}
           >
-            <Text style={styles.sendButtonText}>Send Parcel • {CURRENCY_SYMBOL}{totalFare}</Text>
-            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+            {isSending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.sendButtonText}>Send Parcel • {CURRENCY_SYMBOL}{totalFare}</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              </>
+            )}
           </PressableScale>
         </View>
       )}
