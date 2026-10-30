@@ -1,5 +1,5 @@
 /**
- * Rapido-style Fare Pricing Engine for UniGo.
+ * Demo fare estimates for UniGoMoto.
  *
  * Formula:
  * Total Fare = Base Fare + (Distance beyond Base Km × Per Km Rate) + (Trip Duration × Per Minute Rate) + Platform Fee
@@ -7,7 +7,7 @@
  * Subject to a guaranteed Minimum Fare.
  */
 
-export const RAPIDO_PRICING_CONFIG = {
+export const PRICING_CONFIG = {
   bike: {
     id: 'bike',
     name: 'UniGo Moto',
@@ -36,7 +36,7 @@ export const RAPIDO_PRICING_CONFIG = {
   },
   car: {
     id: 'car',
-    name: 'UniGo Prime',
+    name: 'UniGo Mini',
     icon: '🚗',
     capacity: '4 Seats',
     etaText: '5 mins away',
@@ -47,10 +47,14 @@ export const RAPIDO_PRICING_CONFIG = {
     platformFee: 5,
     minFare: 60,
   },
+  sedan: {
+    id: 'sedan', name: 'UniGo Sedan', icon: '🚘', capacity: '4 Seats', etaText: '7 mins away',
+    baseFare: 85, baseKm: 2, perKm: 22, perMinute: 2, platformFee: 6, minFare: 85,
+  },
 };
 
 /**
- * Calculates vehicle fare breakdown following the Rapido pricing model.
+ * Calculates a demo vehicle fare breakdown.
  * @param {string} vehicleId - 'bike' | 'auto' | 'car'
  * @param {number} distanceKm - Total driving distance in kilometers
  * @param {number} durationMins - Estimated duration in minutes
@@ -70,8 +74,8 @@ export const RAPIDO_PRICING_CONFIG = {
  *   discount: number
  * }}
  */
-export function calculateRapidoFare(vehicleId, distanceKm = 0, durationMins = 0, isCarpool = false) {
-  const config = RAPIDO_PRICING_CONFIG[vehicleId] || RAPIDO_PRICING_CONFIG.bike;
+export function calculateFare(vehicleId, distanceKm = 0, durationMins = 0, isCarpool = false) {
+  const config = PRICING_CONFIG[vehicleId] || PRICING_CONFIG.bike;
   const dist = Math.max(0, Number(distanceKm) || 0);
   const duration = Math.max(0, Number(durationMins) || 0);
 
@@ -111,10 +115,10 @@ export function calculateRapidoFare(vehicleId, distanceKm = 0, durationMins = 0,
  * @param {number} distanceKm
  * @param {number} durationMins
  * @param {boolean} isCarpool
- * @returns {Array<ReturnType<typeof calculateRapidoFare>>}
+ * @returns {Array<ReturnType<typeof calculateFare>>}
  */
 export function calculateAllFares(distanceKm = 0, durationMins = 0, isCarpool = false) {
-  return ['bike', 'auto', 'car'].map((id) =>
-    calculateRapidoFare(id, distanceKm, durationMins, isCarpool)
+  return ['bike', 'auto', 'car', 'sedan'].map((id) =>
+    calculateFare(id, distanceKm, durationMins, isCarpool)
   );
 }

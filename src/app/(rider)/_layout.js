@@ -11,6 +11,7 @@ export default function RiderLayout() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="book" options={{ headerShown: false }} />
+      <Stack.Screen name="trip" options={{ headerShown: false }} />
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
       <Stack.Screen name="donate" options={{ headerShown: false }} />
       <Stack.Screen name="nearby" options={{ headerShown: false }} />

@@ -1,31 +1,19 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useLocation } from '../../../context/LocationProvider';
 import { THEME } from '../../../constants/theme';
+import { useSession } from '../../../context/SessionProvider';
+import { useRouter } from 'expo-router';
 
 export default function ProfileScreen() {
+  const { selectedCity } = useLocation();
+  const { logout } = useSession();
   const router = useRouter();
-  const { selectedCity, resetLocationDecision } = useLocation();
 
   const handleResetLocation = async () => {
-    Alert.alert(
-      'Reset Location Permission',
-      'This will reset your location choice and show the Location Permission screen on next launch.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            await resetLocationDecision();
-            router.replace('/location-permission');
-          },
-        },
-      ]
-    );
+    await Linking.openSettings();
   };
 
   return (
@@ -71,8 +59,10 @@ export default function ProfileScreen() {
           activeOpacity={0.75}
         >
           <Ionicons name="refresh" size={18} color={THEME.colors.danger} style={{ marginRight: 8 }} />
-          <Text style={styles.resetButtonText}>Test Location Permission Screen</Text>
+          <Text style={styles.resetButtonText}>Manage location permission</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.resetButton} onPress={() => router.push('/(rider)/(tabs)/activities')}><Ionicons name="receipt-outline" size={18} color={THEME.colors.primary} /><Text style={styles.infoLabel}>  Ride history</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.resetButton} onPress={logout}><Ionicons name="log-out-outline" size={18} color={THEME.colors.danger} /><Text style={styles.resetButtonText}>  End guest session</Text></TouchableOpacity>
       </View>
     </SafeAreaView>
   );

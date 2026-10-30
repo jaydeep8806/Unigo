@@ -30,8 +30,13 @@ export default function LeafletMapWeb({
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
   const routeLayerRef = useRef(null);
+  const pickerModeRef = useRef(pickerMode);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    pickerModeRef.current = pickerMode;
+  }, [pickerMode]);
 
   const validCenter = useMemo(() => (
     center && isCoordsInIndia(center.lat, center.lng)
@@ -112,6 +117,10 @@ export default function LeafletMapWeb({
             }
           });
 
+          map.on('click', (event) => {
+            if (pickerModeRef.current) map.panTo(event.latlng, { animate: true });
+          });
+
           // Invalidate size to ensure full container fill
           setTimeout(() => map.invalidateSize(), 100);
           setTimeout(() => map.invalidateSize(), 400);
@@ -146,7 +155,7 @@ export default function LeafletMapWeb({
     if (flyTo && flyTo.lat && flyTo.lng) {
       mapInstanceRef.current.flyTo([flyTo.lat, flyTo.lng], flyTo.zoom || 15, { duration: 1.2 });
     }
-  }, [flyTo]);
+  }, [flyTo, loading]);
 
   // Update Markers
   useEffect(() => {
@@ -194,7 +203,7 @@ export default function LeafletMapWeb({
         if (onMarkerPress) onMarkerPress(m);
       });
     });
-  }, [markers, onMarkerPress]);
+  }, [markers, onMarkerPress, loading]);
 
   // Update Route Polyline
   useEffect(() => {
@@ -261,7 +270,7 @@ export default function LeafletMapWeb({
         console.warn('[LeafletMap.web] fitBounds array error:', e);
       }
     }
-  }, [route, fitBounds]);
+  }, [route, fitBounds, loading]);
 
   return (
     <View style={styles.container}>

@@ -1,424 +1,121 @@
-import React, { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  Modal,
-  FlatList,
-  ActivityIndicator,
-  Pressable,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocation } from '../context/LocationProvider';
-import { CITIES } from '../constants/config';
-import { THEME } from '../constants/theme';
+import { searchLocations } from '../services/geocoding';
 
 export default function LocationPermissionScreen() {
-  const router = useRouter();
-  const { requestLocation, setCity, selectedCity } = useLocation();
-  const [isRequesting, setIsRequesting] = useState(false);
-  const [hasDenied, setHasDenied] = useState(false);
-  const [cityModalVisible, setCityModalVisible] = useState(false);
+  const { requestLocation, refreshLocation, selectManualLocation, permissionStatus, servicesEnabled, canAskAgain, isLoading } = useLocation();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const asked = useRef(false);
+  const [manual, setManual] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
 
-  const handleAllowLocation = async () => {
-    setIsRequesting(true);
-    setHasDenied(false);
+  useEffect(() => {
+    if (!manual || query.trim().length < 2) return undefined;
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try { const places = await searchLocations(query); if (active) setResults(places); }
+      catch { if (active) setMessage('Location search unavailable. Check your connection.'); }
+      finally { if (active) setSearching(false); }
+    }, 800);
+    return () => { active = false; clearTimeout(timer); };
+  }, [manual, query]);
 
+  const ask = useCallback(async () => {
+    setBusy(true);
     try {
       const result = await requestLocation();
-      if (result && result.granted) {
-        router.replace('/(rider)/(tabs)');
-      } else {
-        setHasDenied(true);
+      if (!result.granted) {
+        setMessage(result.permission === 'granted' && !result.servicesEnabled
+          ? 'Turn on your device location to continue.'
+          : 'Allow location access to continue.');
       }
-    } catch {
-      setHasDenied(true);
-    } finally {
-      setIsRequesting(false);
+    } finally { setBusy(false); }
+  }, [requestLocation]);
+
+  useEffect(() => {
+    if (!isLoading && !asked.current && permissionStatus === 'undetermined') {
+      asked.current = true;
+      ask();
     }
+  }, [ask, isLoading, permissionStatus]);
+
+  const openSettings = async () => {
+    try {
+      if (permissionStatus === 'granted' && !servicesEnabled && Platform.OS === 'android') {
+        await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+      } else if (Platform.OS !== 'web') {
+        await Linking.openSettings();
+      }
+    } catch { setMessage('Open your phone settings and turn on location and app permission.'); }
   };
 
-  const handleSelectCity = async (city) => {
-    await setCity(city);
-    setCityModalVisible(false);
-    router.replace('/(rider)/(tabs)');
-  };
-
+  const needsSettings = (permissionStatus === 'denied' && !canAskAgain) || (permissionStatus === 'granted' && !servicesEnabled);
+  if (manual) return (
+    <SafeAreaView style={styles.screen}>
+      <View style={{ padding: 24, flex: 1 }}>
+        <TouchableOpacity onPress={() => setManual(false)}><Text style={styles.secondaryText}>‹ Back</Text></TouchableOpacity>
+        <Text style={[styles.title, { textAlign: 'left', marginTop: 24 }]}>Choose your pickup area</Text>
+        <Text style={[styles.description, { textAlign: 'left', marginBottom: 20 }]}>Search for a place in India to continue without device location.</Text>
+        <TextInput value={query} onChangeText={(text) => { setQuery(text); setResults([]); setMessage(''); }} placeholder="Search city, area or landmark" style={styles.input} autoFocus />
+        {searching && <ActivityIndicator color="#0f7a56" style={{ margin: 12 }} />}
+        {!!message && <Text style={styles.message}>{message}</Text>}
+        <ScrollView keyboardShouldPersistTaps="handled">
+          {results.map((place) => <TouchableOpacity key={place.id} style={styles.place} onPress={() => selectManualLocation(place)}><Ionicons name="location-outline" color="#0f7a56" size={20} /><View style={{ flex: 1 }}><Text style={styles.statusText}>{place.title}</Text><Text style={styles.hint}>{place.subtitle}</Text></View></TouchableOpacity>)}
+          {!searching && query.trim().length >= 2 && results.length === 0 && <Text style={styles.hint}>Try a different area or add the city name.</Text>}
+        </ScrollView>
+      </View>
+    </SafeAreaView>
+  );
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.screen}>
       <View style={styles.content}>
-        {/* Top Header Badge */}
-        <View style={styles.badgeRow}>
-          <View style={styles.badge}>
-            <Ionicons name="shield-checkmark" size={14} color={THEME.colors.primary} />
-            <Text style={styles.badgeText}>Safe Rides</Text>
-          </View>
+        <View style={styles.iconOuter}><View style={styles.iconInner}><Ionicons name="location" size={48} color="#fff" /></View></View>
+        <Text style={styles.eyebrow}>BETTER PICKUPS START HERE</Text>
+        <Text style={styles.title}>Turn on your location</Text>
+        <Text style={styles.description}>Allow UniGo to access your location and turn on your phone’s location services to find your pickup point.</Text>
+        <View style={styles.statusCard}>
+          <View style={styles.statusRow}><Ionicons name={permissionStatus === 'granted' ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={permissionStatus === 'granted' ? '#09815a' : '#94a3b8'} /><Text style={styles.statusText}>App location permission</Text></View>
+          <View style={styles.statusRow}><Ionicons name={servicesEnabled ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={servicesEnabled ? '#09815a' : '#94a3b8'} /><Text style={styles.statusText}>Device location is on</Text></View>
         </View>
-
-        {/* Hero Visual Icon */}
-        <View style={styles.heroContainer}>
-          <View style={styles.heroOuterCircle}>
-            <View style={styles.heroInnerCircle}>
-              <Ionicons name="location" size={48} color={THEME.colors.white} />
-            </View>
-          </View>
-        </View>
-
-        {/* Text Content */}
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>Enable Location</Text>
-          <Text style={styles.description}>
-            UniGo needs your location to find nearby drivers, estimate pickup times, and calculate accurate fares.
-          </Text>
-        </View>
-
-        {/* Denied Warning Card */}
-        {hasDenied && (
-          <View style={styles.deniedCard}>
-            <Ionicons name="alert-circle" size={22} color={THEME.colors.warning} style={styles.deniedIcon} />
-            <View style={styles.deniedTextCol}>
-              <Text style={styles.deniedTitle}>Location Access Denied</Text>
-              <Text style={styles.deniedSubtitle}>
-                Please choose your city manually below to explore rides and services.
-              </Text>
-            </View>
-          </View>
-        )}
+        {!!message && <Text style={styles.message}>{message}</Text>}
       </View>
-
-      {/* Bottom Action Section */}
-      <View style={styles.bottomSection}>
-        <TouchableOpacity
-          style={[styles.primaryButton, isRequesting && styles.primaryButtonDisabled]}
-          onPress={handleAllowLocation}
-          disabled={isRequesting}
-          activeOpacity={0.88}
-        >
-          {isRequesting ? (
-            <ActivityIndicator size="small" color={THEME.colors.white} />
-          ) : (
-            <View style={styles.btnContentRow}>
-              <Ionicons name="navigate" size={18} color={THEME.colors.white} style={{ marginRight: 8 }} />
-              <Text style={styles.primaryButtonText}>Allow location</Text>
-            </View>
-          )}
+      <View style={styles.actions}>
+        <TouchableOpacity style={styles.primary} disabled={busy} onPress={needsSettings ? openSettings : ask} accessibilityRole="button">
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{needsSettings ? 'Open settings' : 'Enable location'}</Text>}
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => setCityModalVisible(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.secondaryButtonText}>Choose city manually</Text>
-        </TouchableOpacity>
+        {needsSettings && <TouchableOpacity style={styles.secondary} onPress={refreshLocation}><Text style={styles.secondaryText}>I’ve enabled it · Check again</Text></TouchableOpacity>}
+        <TouchableOpacity style={styles.secondary} onPress={() => { setManual(true); setMessage(''); }}><Text style={styles.secondaryText}>Enter location manually</Text></TouchableOpacity>
+        {Platform.OS === 'ios' && permissionStatus === 'granted' && !servicesEnabled && <Text style={styles.hint}>Turn on Location Services in Settings → Privacy & Security → Location Services, then return here.</Text>}
       </View>
-
-      {/* City Selector Modal */}
-      <Modal
-        visible={cityModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setCityModalVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setCityModalVisible(false)}>
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHandle} />
-              <View style={styles.modalTitleRow}>
-                <Text style={styles.modalTitle}>Select Your City</Text>
-                <TouchableOpacity
-                  onPress={() => setCityModalVisible(false)}
-                  style={styles.modalCloseBtn}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="close" size={22} color={THEME.colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.modalSubtitle}>
-                UniGo rides are currently available in these cities across India.
-              </Text>
-            </View>
-
-            <FlatList
-              data={CITIES}
-              keyExtractor={(item) => item.name}
-              contentContainerStyle={styles.cityListContent}
-              renderItem={({ item }) => {
-                const isSelected = selectedCity?.name === item.name;
-                return (
-                  <TouchableOpacity
-                    style={[styles.cityItem, isSelected && styles.cityItemActive]}
-                    onPress={() => handleSelectCity(item)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={styles.cityIconCircle}>
-                      <Ionicons
-                        name="business-outline"
-                        size={20}
-                        color={isSelected ? THEME.colors.primary : THEME.colors.textSecondary}
-                      />
-                    </View>
-                    <View style={styles.cityTextCol}>
-                      <Text style={[styles.cityName, isSelected && styles.cityNameActive]}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.cityState}>{item.state}</Text>
-                    </View>
-                    {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={22} color={THEME.colors.primary} />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={18} color={THEME.colors.textMuted} />
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: THEME.colors.white,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeRow: {
-    marginBottom: 24,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(15, 122, 86, 0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: THEME.radius.full,
-    gap: 6,
-  },
-  badgeText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: THEME.colors.primary,
-    letterSpacing: 0.3,
-  },
-  heroContainer: {
-    marginBottom: 32,
-  },
-  heroOuterCircle: {
-    width: 156,
-    height: 156,
-    borderRadius: 78,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 8,
-    borderColor: '#D1FAE5',
-    shadowColor: THEME.colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  heroInnerCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: THEME.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  textContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: THEME.colors.textPrimary,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: THEME.colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 10,
-  },
-  deniedCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: THEME.colors.warningLight,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: THEME.radius.md,
-    padding: 14,
-    marginTop: 8,
-    width: '100%',
-  },
-  deniedIcon: {
-    marginRight: 10,
-    marginTop: 2,
-  },
-  deniedTextCol: {
-    flex: 1,
-  },
-  deniedTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#92400E',
-    marginBottom: 2,
-  },
-  deniedSubtitle: {
-    fontSize: 12,
-    color: '#B45309',
-    lineHeight: 17,
-  },
-  bottomSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    paddingTop: 12,
-    backgroundColor: THEME.colors.white,
-  },
-  primaryButton: {
-    backgroundColor: THEME.colors.primary,
-    height: 54,
-    borderRadius: THEME.radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: THEME.colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.7,
-  },
-  btnContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: THEME.colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  secondaryButton: {
-    height: 46,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: THEME.radius.full,
-  },
-  secondaryButtonText: {
-    color: THEME.colors.primary,
-    fontSize: 14.5,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: THEME.colors.white,
-    borderTopLeftRadius: THEME.radius.xl,
-    borderTopRightRadius: THEME.radius.xl,
-    maxHeight: '75%',
-    paddingBottom: 30,
-  },
-  modalHandle: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: THEME.colors.border,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 12,
-  },
-  modalHeader: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
-  },
-  modalTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: THEME.colors.textPrimary,
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: THEME.colors.textSecondary,
-  },
-  cityListContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  cityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: THEME.radius.md,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.surfaceSubtle,
-  },
-  cityItemActive: {
-    backgroundColor: THEME.colors.primaryLight,
-    borderBottomColor: 'transparent',
-  },
-  cityIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: THEME.colors.surfaceSubtle,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  cityTextCol: {
-    flex: 1,
-  },
-  cityName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: THEME.colors.textPrimary,
-  },
-  cityNameActive: {
-    color: THEME.colors.primaryDark,
-    fontWeight: '700',
-  },
-  cityState: {
-    fontSize: 12,
-    color: THEME.colors.textSecondary,
-    marginTop: 1,
-  },
+  screen: { flex: 1, backgroundColor: '#fff' },
+  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  iconOuter: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#e4f7ef', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 32 },
+  iconInner: { width: 78, height: 78, borderRadius: 39, backgroundColor: '#0f7a56', alignItems: 'center', justifyContent: 'center' },
+  eyebrow: { color: '#0f7a56', fontSize: 11, fontWeight: '800', letterSpacing: 1, textAlign: 'center', marginBottom: 12 },
+  title: { color: '#101d2b', fontSize: 28, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
+  description: { color: '#64748b', fontSize: 15, lineHeight: 23, textAlign: 'center' },
+  statusCard: { marginTop: 28, backgroundColor: '#f5f8f7', borderRadius: 18, padding: 18, gap: 16 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusText: { color: '#263b3a', fontSize: 14, fontWeight: '600' },
+  message: { marginTop: 18, color: '#b45309', textAlign: 'center', fontSize: 13 },
+  actions: { paddingHorizontal: 24, paddingBottom: 20, gap: 10 },
+  primary: { backgroundColor: '#0f7a56', minHeight: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center' },
+  primaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  secondary: { alignItems: 'center', padding: 12 },
+  secondaryText: { color: '#0f7a56', fontWeight: '700' },
+  hint: { color: '#64748b', fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  input: { borderRadius: 14, padding: 14, backgroundColor: '#f2f6f4', color: '#172a2a', fontSize: 15 },
+  place: { paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#dce7df', flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

@@ -15,11 +15,6 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#E6F4FE"
       },
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyAhnDLDlYuWtlldckHfkugI8prT07JgHTo"
-        }
-      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
@@ -32,11 +27,13 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow unigo to use your location to calculate routes."
+          "locationWhenInUsePermission": "Allow UniGo to use your location to find your pickup and calculate routes."
         }
       ],
       "expo-router",
-      "expo-image"
+      "expo-image",
+      "expo-font",
+      "expo-status-bar"
     ]
   }
 }

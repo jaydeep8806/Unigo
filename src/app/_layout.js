@@ -6,53 +6,62 @@ import { LocationProvider, useLocation } from '../context/LocationProvider';
 import { WalletProvider } from '../context/WalletProvider';
 import { ActivityProvider } from '../context/ActivityProvider';
 import { THEME } from '../constants/theme';
+import { SessionProvider, useSession } from '../context/SessionProvider';
 
 function RootNavigationGate() {
   const { isLoading, hasMadeDecision } = useLocation();
+  const { isSessionLoading, hasSession } = useSession();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isSessionLoading) return;
 
     const inLocationPermissionScreen = segments[0] === 'location-permission';
+    const inWelcome = segments[0] === 'welcome';
 
-    if (!hasMadeDecision && !inLocationPermissionScreen) {
+    if (!hasSession && !inWelcome) {
+      router.replace('/welcome');
+    } else if (hasSession && !hasMadeDecision && !inLocationPermissionScreen) {
       router.replace('/location-permission');
-    } else if (hasMadeDecision && inLocationPermissionScreen) {
+    } else if (hasSession && hasMadeDecision && (inLocationPermissionScreen || inWelcome)) {
       router.replace('/(rider)/(tabs)');
     }
-  }, [isLoading, hasMadeDecision, segments, router]);
+  }, [isLoading, isSessionLoading, hasSession, hasMadeDecision, segments, router]);
 
-  if (isLoading || (!hasMadeDecision && segments[0] !== 'location-permission')) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={THEME.colors.primary} />
-      </View>
-    );
-  }
-
-  return <Slot />;
+  return (
+    <View style={{ flex: 1 }}>
+      <Slot />
+      {(isLoading || isSessionLoading || (!hasSession && segments[0] !== 'welcome') || (hasSession && !hasMadeDecision && segments[0] !== 'location-permission')) && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={THEME.colors.primary} />
+        </View>
+      )}
+    </View>
+  );
 }
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
+      <SessionProvider>
       <LocationProvider>
         <WalletProvider>
           <ActivityProvider>
-            <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+            <StatusBar barStyle="dark-content" />
             <RootNavigationGate />
           </ActivityProvider>
         </WalletProvider>
       </LocationProvider>
+      </SessionProvider>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   loadingContainer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: THEME.colors.background,

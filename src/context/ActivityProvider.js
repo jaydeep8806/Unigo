@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY_RIDES = '@unigo_user_rides';
@@ -12,6 +12,8 @@ const ActivityContext = createContext({
 
 export function ActivityProvider({ children }) {
   const [rides, setRides] = useState([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const ridesRef = useRef([]);
 
   useEffect(() => {
     let mounted = true;
@@ -19,10 +21,14 @@ export function ActivityProvider({ children }) {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY_RIDES);
         if (stored && mounted) {
-          setRides(JSON.parse(stored));
+          const saved = JSON.parse(stored);
+          ridesRef.current = saved;
+          setRides(saved);
         }
       } catch (e) {
         console.warn('Failed to load rides from AsyncStorage:', e);
+      } finally {
+        if (mounted) setIsLoaded(true);
       }
     }
     loadRides();
@@ -53,27 +59,37 @@ export function ActivityProvider({ children }) {
       ...rideData,
     };
 
-    const updated = [newRide, ...rides];
+    const updated = [newRide, ...ridesRef.current];
+    ridesRef.current = updated;
     setRides(updated);
     await persist(updated);
     return newRide;
-  }, [rides, persist]);
+  }, [persist]);
 
-  const cancelRide = useCallback(async (rideId) => {
-    const updated = rides.map((r) =>
-      r.id === rideId ? { ...r, status: 'cancelled' } : r
-    );
+  const updateRide = useCallback(async (rideId, changes) => {
+    const updated = ridesRef.current.map((ride) => ride.id === rideId ? { ...ride, ...changes } : ride);
+    ridesRef.current = updated;
     setRides(updated);
     await persist(updated);
-  }, [rides, persist]);
+  }, [persist]);
+
+  const cancelRide = useCallback(async (rideId) => {
+    const updated = ridesRef.current.map((r) =>
+      r.id === rideId ? { ...r, status: 'cancelled' } : r
+    );
+    ridesRef.current = updated;
+    setRides(updated);
+    await persist(updated);
+  }, [persist]);
 
   const clearRides = useCallback(async () => {
+    ridesRef.current = [];
     setRides([]);
     await AsyncStorage.removeItem(STORAGE_KEY_RIDES);
   }, []);
 
   return (
-    <ActivityContext.Provider value={{ rides, addRide, cancelRide, clearRides }}>
+    <ActivityContext.Provider value={{ rides, isLoaded, addRide, updateRide, cancelRide, clearRides }}>
       {children}
     </ActivityContext.Provider>
   );

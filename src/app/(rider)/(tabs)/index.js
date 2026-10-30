@@ -231,7 +231,7 @@ export default function RiderHomeScreen() {
           <View style={styles.headerTopRow}>
             <View style={styles.headerGreetingCol}>
               <View style={styles.brandRow}>
-                <Text style={styles.brandTitle}>UniGo</Text>
+                <Text style={styles.brandTitle}>UniGoMoto</Text>
                 <PressableScale
                   style={styles.locationChip}
                   onPress={() => setCityModalVisible(true)}

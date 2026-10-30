@@ -12,9 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../../../constants/theme';
 import { CURRENCY_SYMBOL } from '../../../constants/config';
 import { useActivity } from '../../../context/ActivityProvider';
+import { useRouter } from 'expo-router';
 
 export default function ActivitiesScreen() {
   const { rides, cancelRide, clearRides } = useActivity();
+  const router = useRouter();
 
   const handleCancel = (rideId) => {
     Alert.alert(
@@ -33,10 +35,11 @@ export default function ActivitiesScreen() {
 
   const renderRideItem = ({ item }) => {
     const isCancelled = item.status === 'cancelled';
-    const isConfirmed = item.status === 'confirmed';
+    const isConfirmed = ['confirmed', 'searching', 'assigned', 'arrived', 'in_progress'].includes(item.status);
+    const statusLabel = { searching: 'Finding driver', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' }[item.status] || item.status;
 
     return (
-      <View style={styles.rideCard}>
+      <TouchableOpacity style={styles.rideCard} onPress={() => router.push({ pathname: '/(rider)/trip', params: { id: item.id } })} activeOpacity={0.85}>
         {/* Card Header */}
         <View style={styles.rideHeader}>
           <View style={styles.vehiclePill}>
@@ -64,7 +67,7 @@ export default function ActivitiesScreen() {
                 isCancelled && styles.statusTextCancelled,
               ]}
             >
-              {isConfirmed ? 'Confirmed' : 'Cancelled'}
+              {statusLabel}
             </Text>
           </View>
         </View>
@@ -115,7 +118,7 @@ export default function ActivitiesScreen() {
               {CURRENCY_SYMBOL}{item.fare}
             </Text>
             <Text style={styles.paymentMethod}>
-              Paid via {item.paymentType || 'Cash'}
+              {['paid', 'rated'].includes(item.status) ? 'Paid' : 'Payment'}: {item.paymentType || 'Cash'}
             </Text>
           </View>
 
@@ -128,7 +131,7 @@ export default function ActivitiesScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

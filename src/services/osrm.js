@@ -14,7 +14,14 @@ export async function fetchDrivingRoute(start, end) {
   // OSRM expects coordinates in {lon},{lat} format
   const url = `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=polyline`;
 
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) {
     throw new Error(`OSRM network request failed with status ${response.status}`);
   }

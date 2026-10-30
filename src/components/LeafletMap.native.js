@@ -78,12 +78,16 @@ export default function LeafletMap({
       if (data.type === 'CONSOLE_LOG') {
         console.log('[LeafletMap WebView]', data.message);
       } else if (data.type === 'MAP_READY') {
-        setLoading(false);
-        setErrorMessage('');
         setMapReady(true);
         if (data.lat && data.lng && onCenterChange) {
           onCenterChange({ lat: data.lat, lng: data.lng });
         }
+      } else if (data.type === 'TILE_READY') {
+        setLoading(false);
+        setErrorMessage('');
+      } else if (data.type === 'TILE_ERROR') {
+        setLoading(false);
+        setErrorMessage('Map tiles could not load. Check your connection.');
       } else if (data.type === 'MAP_DRAGGING') {
         if (onDraggingChange) onDraggingChange(Boolean(data.isDragging));
       } else if (data.type === 'CENTER_CHANGE' && onCenterChange) {
@@ -247,14 +251,24 @@ function generateMapHTML(center, zoom, markers, route, pickerMode, fitBounds) {
         attribution: '© Google Maps'
       });
 
+      function onTileReady() {
+        window.ReactNativeWebView.postMessage(JSON.stringify({type:'TILE_READY'}));
+      }
+
+      tileLayer.on('tileload', onTileReady);
       tileLayer.on('tileerror', function() {
         if (!window.__switchedToOsm) {
           window.__switchedToOsm = true;
           map.removeLayer(tileLayer);
-          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          var fallbackLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap'
-          }).addTo(map);
+          });
+          fallbackLayer.on('tileload', onTileReady);
+          fallbackLayer.on('tileerror', function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({type:'TILE_ERROR'}));
+          });
+          fallbackLayer.addTo(map);
         }
       });
 
@@ -269,6 +283,8 @@ function generateMapHTML(center, zoom, markers, route, pickerMode, fitBounds) {
       var markersLayer = L.layerGroup().addTo(map);
       var routeLayer = L.layerGroup().addTo(map);
       var isPickerMode = ${pickerMode ? 'true' : 'false'};
+      var lastFlyToTimestamp = null;
+      var lastBoundsKey = null;
 
       function createIcon(color){
         var svg = '<svg width=\"26\" height=\"34\" viewBox=\"0 0 26 34\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">' +
@@ -364,18 +380,30 @@ function generateMapHTML(center, zoom, markers, route, pickerMode, fitBounds) {
       updateMarkers(${markersJSON});
       updateRoute(${routeJSON});
       var initBounds=${fitBoundsJSON};
-      if(initBounds) doFitBounds(initBounds);
+      if(initBounds) {
+        lastBoundsKey = JSON.stringify(initBounds);
+        doFitBounds(initBounds);
+      }
 
       // Global update function called from React Native
       window.__updateMap=function(data){
-        if(data.pickerMode!==undefined) isPickerMode = Boolean(data.pickerMode);
+        if(data.pickerMode!==undefined) {
+          if (data.pickerMode && !isPickerMode) lastBoundsKey = null;
+          isPickerMode = Boolean(data.pickerMode);
+        }
 
-        if(data.flyTo && isFinite(data.flyTo.lat) && isFinite(data.flyTo.lng)){
+        if(data.flyTo && data.flyTo.timestamp !== lastFlyToTimestamp && isFinite(data.flyTo.lat) && isFinite(data.flyTo.lng)){
+          lastFlyToTimestamp = data.flyTo.timestamp;
           map.setView([data.flyTo.lat, data.flyTo.lng], 15, { animate: true });
         } else if(!isPickerMode){
           if(data.fitBounds && data.fitBounds.length===2){
-            doFitBounds(data.fitBounds);
+            var boundsKey = JSON.stringify(data.fitBounds);
+            if (boundsKey !== lastBoundsKey) {
+              lastBoundsKey = boundsKey;
+              doFitBounds(data.fitBounds);
+            }
           } else if(data.center && isFinite(data.center.lat) && isFinite(data.center.lng)){
+            lastBoundsKey = null;
             var c = map.getCenter();
             var d = Math.abs(c.lat - data.center.lat) + Math.abs(c.lng - data.center.lng);
             if (d > 0.001) {
@@ -439,9 +467,9 @@ const styles = StyleSheet.create({
   },
   errorBanner: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
+    top: '45%',
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

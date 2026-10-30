@@ -8,7 +8,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Keyboard,
-  Dimensions,
+  Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,22 +25,26 @@ import { calculateAllFares } from '../../services/pricing';
 import LeafletMap from '../../components/LeafletMap';
 import PressableScale from '../../components/PressableScale';
 import Toast from '../../components/Toast';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { useSavedLocations } from '../../hooks/useSavedLocations';
 
 export default function BookScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const params = useLocalSearchParams();
   const isCarpool = params.type === 'carpool';
   const shouldAutoFocus = params.autoFocus === 'true';
 
-  const { coordinates, selectedCity, permissionStatus, requestLocation } = useLocation();
-  const { addRide } = useActivity();
-  const { deductMoney, balance } = useWallet();
+  const { coordinates, selectedCity } = useLocation();
+  const { rides, addRide } = useActivity();
+  const { balance } = useWallet();
+  const { places, addRecent, savePlace } = useSavedLocations();
 
   const [bookingInProgress, setBookingInProgress] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
+  const [reviewRide, setReviewRide] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
 
   // Active user origin (customizable by user or defaulted to GPS/City)
   const defaultOrigin = useMemo(() => {
@@ -58,7 +63,7 @@ export default function BookScreen() {
     return {
       latitude: city.lat,
       longitude: city.lng,
-      title: `${city.name} Center`,
+      title: city.isManual ? city.name : `${city.name} Center`,
     };
   }, [coordinates, selectedCity]);
 
@@ -75,6 +80,8 @@ export default function BookScreen() {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [searchError, setSearchError] = useState(false);
 
   // Pin Drop (Picker) mode state
   const [isPickerMode, setIsPickerMode] = useState(false);
@@ -84,6 +91,7 @@ export default function BookScreen() {
   const [isMapDragging, setIsMapDragging] = useState(false);
   const [flyToCoords, setFlyToCoords] = useState(null);
   const pickerDebounceRef = useRef(null);
+  const pickerRequestRef = useRef(0);
 
   // Route & Fares
   const [routeCoords, setRouteCoords] = useState([]);
@@ -97,13 +105,25 @@ export default function BookScreen() {
 
   const searchInputRef = useRef(null);
   const debounceTimerRef = useRef(null);
-  const hasRequestedLocationRef = useRef(false);
+  const searchRequestRef = useRef(0);
 
   useEffect(() => {
-    if (permissionStatus !== 'undetermined' || hasRequestedLocationRef.current) return;
-    hasRequestedLocationRef.current = true;
-    requestLocation();
-  }, [permissionStatus, requestLocation]);
+    const listener = Keyboard.addListener('keyboardDidHide', () => setIsEditingLocation(false));
+    return () => listener.remove();
+  }, []);
+
+  useEffect(() => {
+    // Keep the displayed default in sync when GPS or the selected city changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!customOrigin && !isEditingLocation) setPickupQuery(defaultOrigin.title);
+  }, [customOrigin, defaultOrigin, isEditingLocation]);
+
+  useEffect(() => () => {
+    clearTimeout(debounceTimerRef.current);
+    clearTimeout(pickerDebounceRef.current);
+    searchRequestRef.current += 1;
+    pickerRequestRef.current += 1;
+  }, []);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -125,15 +145,15 @@ export default function BookScreen() {
       (pickerCoords.lng - origin.longitude) *
       111 *
       Math.cos((origin.latitude * Math.PI) / 180);
-    return +Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
+    return +Math.sqrt(dLat * dLat + dLon * dLon).toFixed(2);
   }, [pickerCoords, origin]);
 
-  // Prevent user from selecting Pickup as Drop point (< 200m)
-  const isTooClose = pickerDistKm !== null && pickerDistKm < 0.2;
+  // Avoid selecting essentially the same point as pickup while allowing short rides.
+  const isTooClose = pickerDistKm !== null && pickerDistKm < 0.02;
 
   // Real-time Rapido fare estimate for the picker banner
   const estPickerFare = useMemo(() => {
-    if (pickerDistKm === null || pickerDistKm < 0.2) return null;
+    if (pickerDistKm === null || pickerDistKm < 0.02) return null;
     const bike = Math.max(
       25,
       Math.round(25 + Math.max(0, pickerDistKm - 1.5) * 9 + pickerDistKm * 3 * 1.0 + 3)
@@ -147,6 +167,9 @@ export default function BookScreen() {
 
   // Debounced search query for autocomplete (pickup or drop)
   const handleSearchChange = (text, field = activeSearchField) => {
+    const requestId = ++searchRequestRef.current;
+    setSearchError(false);
+    setSearchResults([]);
     if (field === 'pickup') {
       setPickupQuery(text);
     } else {
@@ -168,13 +191,13 @@ export default function BookScreen() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const results = await searchLocations(text, origin);
-        setSearchResults(results);
+        if (requestId === searchRequestRef.current) setSearchResults(results);
       } catch {
-        setSearchResults([]);
+        if (requestId === searchRequestRef.current) setSearchError(true);
       } finally {
-        setIsSearching(false);
+        if (requestId === searchRequestRef.current) setIsSearching(false);
       }
-    }, 400);
+    }, 800);
   };
 
   // Calculate driving route using OSRM
@@ -211,7 +234,12 @@ export default function BookScreen() {
   // Select place from autocomplete
   const handleSelectPlace = useCallback(
     async (place) => {
+      addRecent(place);
       Keyboard.dismiss();
+      setIsEditingLocation(false);
+      searchRequestRef.current += 1;
+      clearTimeout(debounceTimerRef.current);
+      setIsSearching(false);
       setShowSearchResults(false);
       setIsPickerMode(false);
       setFlyToCoords(null);
@@ -235,7 +263,7 @@ export default function BookScreen() {
         await calculateRoute(origin, selectedLoc);
       }
     },
-    [activeSearchField, destination, origin, calculateRoute]
+    [activeSearchField, destination, origin, calculateRoute, addRecent]
   );
 
   // Swap pickup and drop
@@ -252,27 +280,29 @@ export default function BookScreen() {
   // Reverse-geocode live address while dragging/panning the map
   const fetchPickerAddress = useCallback(async (lat, lng) => {
     if (!lat || !lng) return;
+    const requestId = ++pickerRequestRef.current;
     setPickerAddressLoading(true);
     try {
       const geo = await reverseGeocode(lat, lng);
-      setPickerAddress(
+      if (requestId === pickerRequestRef.current) setPickerAddress(
         geo.title ? `${geo.title}${geo.subtitle ? ', ' + geo.subtitle : ''}` : 'Pinned Location'
       );
     } catch {
-      setPickerAddress('Selected Drop Point');
+      if (requestId === pickerRequestRef.current) setPickerAddress('Selected Drop Point');
     } finally {
-      setPickerAddressLoading(false);
+      if (requestId === pickerRequestRef.current) setPickerAddressLoading(false);
     }
   }, []);
 
   // Center change listener for picker mode (invoked on map moveend)
   const handleCenterChange = useCallback(
     (coords) => {
+      pickerRequestRef.current += 1;
       setPickerCoords(coords);
       if (pickerDebounceRef.current) clearTimeout(pickerDebounceRef.current);
       pickerDebounceRef.current = setTimeout(() => {
         fetchPickerAddress(coords.lat, coords.lng);
-      }, 300);
+      }, 800);
     },
     [fetchPickerAddress]
   );
@@ -281,6 +311,7 @@ export default function BookScreen() {
   const togglePickerMode = useCallback(() => {
     const next = !isPickerMode;
     setIsPickerMode(next);
+    setIsEditingLocation(false);
     setShowSearchResults(false);
     Keyboard.dismiss();
     if (next) {
@@ -379,16 +410,10 @@ export default function BookScreen() {
   const handleConfirmRide = async () => {
     if (!destination || !selectedFareObj) return;
 
+    setReviewError('');
     setBookingInProgress(true);
     try {
-      const fareAmount = selectedFareObj.totalFare || selectedFareObj.baseFare || 50;
-
-      // Deduct from wallet if sufficient balance, else cash
-      let paymentType = 'Cash';
-      if (balance >= fareAmount) {
-        const paid = await deductMoney(fareAmount, `Ride to ${destination.title}`);
-        if (paid) paymentType = 'UniGo Wallet';
-      }
+      const fareAmount = selectedFareObj.fare;
 
       const ride = await addRide({
         origin: origin.title,
@@ -398,14 +423,18 @@ export default function BookScreen() {
         fare: fareAmount,
         distanceKm: distance,
         durationMins: duration,
-        paymentType,
+        paymentType: paymentMethod,
         isCarpool,
+        status: 'searching',
+        pickupCoords: { latitude: origin.latitude, longitude: origin.longitude },
+        destinationCoords: { latitude: destination.latitude, longitude: destination.longitude },
+        routeCoords,
       });
 
-      setConfirmedBooking(ride);
-      showToast('Ride booked successfully! 🎉');
+      setReviewRide(false);
+      router.push({ pathname: '/(rider)/trip', params: { id: ride.id } });
     } catch {
-      showToast('Could not complete booking. Please try again.');
+      setReviewError('Could not complete booking. Please try again.');
     } finally {
       setBookingInProgress(false);
     }
@@ -414,7 +443,7 @@ export default function BookScreen() {
   return (
     <View style={styles.container}>
       {/* Full-screen Leaflet Map */}
-      <View style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, zIndex: 0 }]}>
+      <View style={[StyleSheet.absoluteFillObject, { width: screenWidth, height: screenHeight, zIndex: 0 }]}>
         <LeafletMap
           center={{ lat: origin.latitude, lng: origin.longitude }}
           zoom={14}
@@ -471,6 +500,11 @@ export default function BookScreen() {
         >
           <Ionicons name="locate" size={18} color={THEME.colors.primary} />
           <Text style={styles.recenterBtnText}>Near Pickup</Text>
+        </TouchableOpacity>
+      )}
+      {!isPickerMode && !isEditingLocation && (
+        <TouchableOpacity style={[styles.recenterBtn, { top: undefined, bottom: Math.max(insets.bottom + 24, destination ? screenHeight * 0.57 : (rides.length > 0 ? 192 : 24)) }]} onPress={() => setFlyToCoords({ lat: origin.latitude, lng: origin.longitude, timestamp: Date.now() })} accessibilityLabel="Recenter on pickup">
+          <Ionicons name="locate" size={18} color={THEME.colors.primary} /><Text style={styles.recenterBtnText}>Pickup</Text>
         </TouchableOpacity>
       )}
 
@@ -533,8 +567,16 @@ export default function BookScreen() {
                   placeholderTextColor={THEME.colors.mutedText}
                   value={pickupQuery}
                   onFocus={() => {
+                    setIsEditingLocation(true);
+                    if (activeSearchField !== 'pickup') {
+                      searchRequestRef.current += 1;
+                      clearTimeout(debounceTimerRef.current);
+                      setIsSearching(false);
+                      setSearchResults([]);
+                      setShowSearchResults(false);
+                    }
                     setActiveSearchField('pickup');
-                    if (searchResults.length > 0) setShowSearchResults(true);
+                    if (activeSearchField === 'pickup' && searchResults.length > 0) setShowSearchResults(true);
                   }}
                   onChangeText={(text) => handleSearchChange(text, 'pickup')}
                   returnKeyType="search"
@@ -542,6 +584,9 @@ export default function BookScreen() {
                 {pickupQuery.length > 0 && (
                   <TouchableOpacity
                     onPress={() => {
+                      searchRequestRef.current += 1;
+                      clearTimeout(debounceTimerRef.current);
+                      setIsSearching(false);
                       setPickupQuery('');
                       setCustomOrigin(null);
                       setSearchResults([]);
@@ -567,8 +612,16 @@ export default function BookScreen() {
                   placeholderTextColor={THEME.colors.mutedText}
                   value={dropQuery}
                   onFocus={() => {
+                    setIsEditingLocation(true);
+                    if (activeSearchField !== 'drop') {
+                      searchRequestRef.current += 1;
+                      clearTimeout(debounceTimerRef.current);
+                      setIsSearching(false);
+                      setSearchResults([]);
+                      setShowSearchResults(false);
+                    }
                     setActiveSearchField('drop');
-                    if (searchResults.length > 0) setShowSearchResults(true);
+                    if (activeSearchField === 'drop' && searchResults.length > 0) setShowSearchResults(true);
                   }}
                   onChangeText={(text) => handleSearchChange(text, 'drop')}
                   returnKeyType="search"
@@ -576,6 +629,9 @@ export default function BookScreen() {
                 {dropQuery.length > 0 && (
                   <TouchableOpacity
                     onPress={() => {
+                      searchRequestRef.current += 1;
+                      clearTimeout(debounceTimerRef.current);
+                      setIsSearching(false);
                       setDropQuery('');
                       setDestination(null);
                       setSearchResults([]);
@@ -612,7 +668,7 @@ export default function BookScreen() {
         )}
 
         {/* Autocomplete Results Dropdown */}
-        {showSearchResults && searchResults.length > 0 && (
+        {showSearchResults && (searchResults.length > 0 || (!isSearching && (searchError || (activeSearchField === 'pickup' ? pickupQuery : dropQuery).trim().length >= 2))) && (
           <View style={styles.resultsCard}>
             <ScrollView
               keyboardShouldPersistTaps="handled"
@@ -637,14 +693,45 @@ export default function BookScreen() {
                   </View>
                 </TouchableOpacity>
               ))}
+              {!searchResults.length && <Text style={styles.searchEmpty}>{searchError ? 'Location search is unavailable. Check your connection and try again.' : 'No places found. Try another area or add the city name.'}</Text>}
+            </ScrollView>
+            <Text style={styles.searchAttribution}>Location data © OpenStreetMap contributors</Text>
+          </View>
+        )}
+        {isEditingLocation && !showSearchResults && (Object.keys(places.saved).length > 0 || places.recent.length > 0) && (
+          <View style={styles.resultsCard}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 180 }}>
+              {Object.entries(places.saved).map(([label, place]) => <TouchableOpacity key={label} style={styles.resultItem} onPress={() => handleSelectPlace(place)}><Ionicons name="bookmark-outline" size={18} color={THEME.colors.primary} style={{ marginRight: 10 }} /><View style={{ flex: 1 }}><Text style={styles.resultTitle}>{label}</Text><Text style={styles.resultSubtitle} numberOfLines={1}>{place.title}</Text></View></TouchableOpacity>)}
+              {places.recent.slice(0, 4).map((place) => <TouchableOpacity key={`recent-${place.id}`} style={styles.resultItem} onPress={() => handleSelectPlace(place)}><Ionicons name="time-outline" size={18} color={THEME.colors.primary} style={{ marginRight: 10 }} /><Text style={styles.resultTitle} numberOfLines={1}>{place.title}</Text></TouchableOpacity>)}
             </ScrollView>
           </View>
         )}
       </SafeAreaView>
 
+      {!destination && !isPickerMode && !isEditingLocation && rides.length > 0 && (
+        <View style={[styles.recentTrips, { bottom: Math.max(16, insets.bottom + 8) }]}>
+          <View style={styles.recentHeader}>
+            <Text style={styles.recentTitle}>Recent trips</Text>
+            <TouchableOpacity onPress={() => router.push('/(rider)/(tabs)/activities')}>
+              <Text style={styles.recentSeeAll}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          {rides.slice(0, 2).map((ride) => (
+            <TouchableOpacity key={ride.id} style={styles.recentTripRow} onPress={() => router.push({ pathname: '/(rider)/trip', params: { id: ride.id } })}>
+              <Ionicons name="time-outline" size={20} color={THEME.colors.primary} />
+              <View style={styles.recentTripText}>
+                <Text style={styles.recentDestination} numberOfLines={1}>{ride.destination}</Text>
+                <Text style={styles.recentDetails} numberOfLines={1}>{ride.vehicleName} · {CURRENCY_SYMBOL}{ride.fare}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={THEME.colors.mutedText} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Picker Mode Floating Confirm Button with Live Address */}
       {isPickerMode && (
-        <View style={styles.pickerConfirmWrap}>
+        <View style={[styles.pickerConfirmWrap, { bottom: Math.max(16, insets.bottom + 8) }]}>
           <View style={styles.pickerAddressCard}>
             <View style={styles.pickerAddressHeader}>
               <Text style={styles.pickerAddressLabel}>Selected Drop Point</Text>
@@ -665,7 +752,7 @@ export default function BookScreen() {
             </View>
             {estPickerFare && !isTooClose && (
               <Text style={styles.pickerFareEstimate}>
-                ⚡ Rapido Est: ₹{estPickerFare.bike} (Bike) • ₹{estPickerFare.auto} (Auto)
+                Estimate: ₹{estPickerFare.bike} (Bike) • ₹{estPickerFare.auto} (Auto)
               </Text>
             )}
             {isTooClose && (
@@ -675,9 +762,9 @@ export default function BookScreen() {
             )}
           </View>
           <PressableScale
-            style={[styles.confirmPinBtn, isTooClose && styles.confirmPinBtnDisabled]}
+            style={[styles.confirmPinBtn, (isTooClose || isMapDragging) && styles.confirmPinBtnDisabled]}
             onPress={handleConfirmPicker}
-            disabled={isTooClose}
+            disabled={isTooClose || isMapDragging}
           >
             <Ionicons
               name={isTooClose ? 'alert-circle' : 'checkmark-circle'}
@@ -693,8 +780,10 @@ export default function BookScreen() {
       )}
 
       {/* Bottom Sheet Card: Fares & Booking */}
-      {destination && !isPickerMode && (
-        <View style={[styles.bottomSheet, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
+      {destination && !isPickerMode && !isEditingLocation && pickupQuery === origin.title && dropQuery === destination.title && (
+        <View style={[styles.bottomSheet, { height: Math.min(screenHeight * 0.55, 410), paddingBottom: Math.max(12, insets.bottom + 8) }]}>
+          <ScrollView style={styles.fareScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.saveLocations}><Text style={styles.saveLocationsLabel}>Save destination as</Text>{['Home', 'Work', 'College'].map((label) => <TouchableOpacity key={label} onPress={() => { savePlace(label, { id: `${destination.latitude}-${destination.longitude}`, ...destination }); showToast(`Saved as ${label}`); }}><Text style={styles.saveLocationLink}>{label}</Text></TouchableOpacity>)}</View>
           {/* Carpool split notification badge */}
           {isCarpool && (
             <View style={styles.carpoolNotice}>
@@ -723,7 +812,7 @@ export default function BookScreen() {
             <View style={styles.routeStatDivider} />
             <View style={styles.routeStat}>
               <Ionicons name="cash-outline" size={16} color={THEME.colors.primary} />
-              <Text style={styles.routeStatText}>Cash / UPI</Text>
+              <Text style={styles.routeStatText}>Cash / Wallet</Text>
             </View>
           </View>
 
@@ -760,7 +849,7 @@ export default function BookScreen() {
               <View style={styles.fareBreakdownHeader}>
                 <Ionicons name="flash" size={13} color="#0F7A56" />
                 <Text style={styles.fareBreakdownTitle}>
-                  Rapido Rate: Base ₹{selectedFareObj.baseFare} + ₹{selectedFareObj.perKm}/km + ₹{selectedFareObj.perMinute}/min
+                  Estimated fare: Base ₹{selectedFareObj.baseFare} + ₹{selectedFareObj.perKm}/km + ₹{selectedFareObj.perMinute}/min
                 </Text>
                 <Text style={styles.fareBreakdownEta}>{selectedFareObj.etaText}</Text>
               </View>
@@ -770,24 +859,72 @@ export default function BookScreen() {
             </View>
           )}
 
+          </ScrollView>
           {/* Book Ride Button */}
-          <PressableScale
+          <View style={styles.bookFooter}>
+          <TouchableOpacity
             style={styles.bookButton}
-            onPress={handleConfirmRide}
-            disabled={bookingInProgress}
+            onPress={() => { setReviewError(''); setReviewRide(true); }}
+            disabled={bookingInProgress || routeLoading}
+            accessibilityRole="button"
           >
-            {bookingInProgress ? (
+            {bookingInProgress || routeLoading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <>
                 <Text style={styles.bookButtonText}>
-                  {isCarpool ? 'Find Carpool Match' : `Book ${selectedFareObj?.name || 'Ride'}`} • ₹{selectedFareObj?.totalFare || 50}
+                  {`Continue with ${selectedFareObj?.name || 'Ride'}`} • ₹{selectedFareObj?.fare}
                 </Text>
                 <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
               </>
             )}
-          </PressableScale>
+          </TouchableOpacity>
+          </View>
         </View>
+      )}
+
+      {reviewRide && destination && selectedFareObj && (
+        <Modal visible animationType="slide" onRequestClose={() => { if (!bookingInProgress) setReviewRide(false); }}>
+        <SafeAreaView style={styles.reviewScreen} edges={['top', 'bottom']}>
+          <View style={styles.reviewHeader}>
+            <TouchableOpacity style={styles.reviewBack} onPress={() => setReviewRide(false)} accessibilityLabel="Back to vehicle selection">
+              <Ionicons name="arrow-back" size={23} color="#172a2a" />
+            </TouchableOpacity>
+            <View><Text style={styles.reviewTitle}>Review your ride</Text><Text style={styles.reviewSubtitle}>Check details before booking</Text></View>
+          </View>
+          <ScrollView contentContainerStyle={styles.reviewContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.reviewVehicle}>
+              <View style={styles.reviewVehicleIcon}><Text style={{ fontSize: 32 }}>{selectedFareObj.icon}</Text></View>
+              <View style={{ flex: 1 }}><Text style={styles.reviewVehicleName}>{selectedFareObj.name}</Text><Text style={styles.reviewMuted}>{selectedFareObj.capacity} · {distance} km · {duration} min trip</Text><Text style={styles.reviewMuted}>{selectedFareObj.etaText} (estimate)</Text></View>
+              <Text style={styles.reviewPrice}>₹{selectedFareObj.fare}</Text>
+            </View>
+            <Text style={styles.reviewSectionTitle}>Your route</Text>
+            <View style={styles.reviewCard}>
+              <View style={styles.reviewRouteRow}><View style={[styles.reviewPoint, { backgroundColor: '#10b981' }]} /><View style={{ flex: 1 }}><Text style={styles.reviewLabel}>PICKUP</Text><Text style={styles.reviewAddress}>{origin.title}</Text></View></View>
+              <View style={styles.reviewRouteDivider} />
+              <View style={styles.reviewRouteRow}><View style={[styles.reviewPoint, { backgroundColor: '#ef4444' }]} /><View style={{ flex: 1 }}><Text style={styles.reviewLabel}>DROP</Text><Text style={styles.reviewAddress}>{destination.title}</Text></View></View>
+            </View>
+            <Text style={styles.reviewSectionTitle}>Payment method</Text>
+            <View style={styles.reviewCard}>
+              {['Cash', 'UniGo Wallet'].map((method) => (
+                <TouchableOpacity key={method} style={styles.paymentRow} onPress={() => setPaymentMethod(method)} accessibilityRole="radio" accessibilityState={{ checked: paymentMethod === method }}>
+                  <Ionicons name={method === 'Cash' ? 'cash-outline' : 'wallet-outline'} size={22} color="#0f7a56" />
+                  <View style={{ flex: 1 }}><Text style={styles.paymentName}>{method}</Text>{method === 'UniGo Wallet' && <Text style={styles.reviewMuted}>Balance ₹{Number(balance).toFixed(2)}</Text>}</View>
+                  <Ionicons name={paymentMethod === method ? 'radio-button-on' : 'radio-button-off'} size={22} color={paymentMethod === method ? '#0f7a56' : '#94a3b8'} />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.demoNotice}><Ionicons name="information-circle-outline" size={19} color="#0f7a56" /><Text style={styles.demoNoticeText}>This is a demo booking. Driver details and the ride OTP are simulated.</Text></View>
+            {!!reviewError && <Text style={styles.reviewError}>{reviewError}</Text>}
+          </ScrollView>
+          <View style={[styles.reviewFooter, { paddingBottom: Math.max(14, insets.bottom) }]}>
+            <View style={styles.reviewTotalRow}><Text style={styles.reviewTotalLabel}>Estimated total</Text><Text style={styles.reviewTotal}>₹{selectedFareObj.fare}</Text></View>
+            <TouchableOpacity style={styles.reviewConfirm} onPress={handleConfirmRide} disabled={bookingInProgress}>
+              {bookingInProgress ? <ActivityIndicator color="#fff" /> : <Text style={styles.reviewConfirmText}>Confirm {selectedFareObj.name}</Text>}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+        </Modal>
       )}
 
       {/* Confirmed Ride Driver Arrival Modal */}
@@ -809,6 +946,8 @@ export default function BookScreen() {
                 <Ionicons name="close" size={20} color={THEME.colors.textSecondary} />
               </TouchableOpacity>
             </View>
+
+            <Text style={styles.otpHelp}>Demo booking · Temporary ride OTP for starting this ride.</Text>
 
             <View style={styles.driverProfileRow}>
               <View style={styles.driverAvatar}>
@@ -856,13 +995,50 @@ export default function BookScreen() {
       <Toast
         visible={toastVisible}
         message={toastMessage}
-        onHide={() => setToastVisible(false)}
+        onDismiss={() => setToastVisible(false)}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  recentTrips: { position: 'absolute', left: 16, right: 16, zIndex: 25, backgroundColor: '#fff', borderRadius: 18, padding: 14, ...THEME.shadows.floating },
+  recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  recentTitle: { color: '#173a2c', fontSize: 15, fontWeight: '800' },
+  recentSeeAll: { color: '#0f7a56', fontSize: 12, fontWeight: '700', padding: 4 },
+  recentTripRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
+  recentTripText: { flex: 1 },
+  recentDestination: { color: '#173a2c', fontSize: 14, fontWeight: '700' },
+  recentDetails: { color: '#71837c', fontSize: 12, marginTop: 2 },
+  reviewScreen: { flex: 1, backgroundColor: '#f5f8f7' },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14, backgroundColor: '#fff' },
+  reviewBack: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2f6f4' },
+  reviewTitle: { fontSize: 19, fontWeight: '800', color: '#102b25' },
+  reviewSubtitle: { fontSize: 12, color: '#71837c', marginTop: 3 },
+  reviewContent: { padding: 20, paddingBottom: 28 },
+  reviewVehicle: { backgroundColor: '#e4f5ec', borderWidth: 1, borderColor: '#c5ead6', borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  reviewVehicleIcon: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  reviewVehicleName: { fontSize: 17, fontWeight: '800', color: '#123d2f', marginBottom: 4 },
+  reviewPrice: { fontSize: 21, fontWeight: '800', color: '#0f7a56' },
+  reviewMuted: { color: '#71837c', fontSize: 12, lineHeight: 18 },
+  reviewSectionTitle: { fontSize: 15, fontWeight: '800', color: '#1a302b', marginTop: 24, marginBottom: 10 },
+  reviewCard: { borderRadius: 18, paddingHorizontal: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e9efeb' },
+  reviewRouteRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 15 },
+  reviewPoint: { width: 11, height: 11, borderRadius: 5.5 },
+  reviewRouteDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#e6ece9', marginLeft: 25 },
+  reviewLabel: { color: '#8b9b95', fontSize: 10, fontWeight: '800', letterSpacing: 0.7, marginBottom: 4 },
+  reviewAddress: { color: '#1c302b', fontSize: 14, fontWeight: '700' },
+  paymentRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#e6ece9' },
+  paymentName: { color: '#1c302b', fontSize: 14, fontWeight: '700' },
+  demoNotice: { flexDirection: 'row', gap: 8, backgroundColor: '#eaf8f0', borderRadius: 12, padding: 12, marginTop: 20, alignItems: 'flex-start' },
+  demoNoticeText: { flex: 1, color: '#356b52', fontSize: 12, lineHeight: 18 },
+  reviewError: { color: '#b91c1c', fontSize: 13, marginTop: 12 },
+  reviewFooter: { backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 14, borderTopWidth: 1, borderColor: '#e7eee9' },
+  reviewTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  reviewTotalLabel: { fontSize: 14, color: '#64748b', fontWeight: '600' },
+  reviewTotal: { fontSize: 20, color: '#142f27', fontWeight: '800' },
+  reviewConfirm: { backgroundColor: '#0f7a56', minHeight: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
+  reviewConfirmText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   container: {
     flex: 1,
     backgroundColor: '#F4F7F5',
@@ -1009,12 +1185,14 @@ const styles = StyleSheet.create({
     top: '50%',
     left: '50%',
     marginLeft: -60,
-    marginTop: -74,
+    marginTop: -44,
     width: 120,
     alignItems: 'center',
     zIndex: 15,
   },
   centerTooltip: {
+    position: 'absolute',
+    bottom: 52,
     backgroundColor: '#0F172A',
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -1250,6 +1428,17 @@ const styles = StyleSheet.create({
     color: THEME.colors.mutedText,
     marginTop: 2,
   },
+  searchEmpty: {
+    padding: 16,
+    color: THEME.colors.mutedText,
+    fontSize: 13,
+  },
+  searchAttribution: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    fontSize: 10,
+    color: THEME.colors.mutedText,
+  },
   pickerConfirmWrap: {
     position: 'absolute',
     bottom: 24,
@@ -1352,6 +1541,18 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     ...THEME.shadows.floating,
     zIndex: 30,
+  },
+  fareScroll: {
+    flex: 1,
+  },
+  bookFooter: { flexShrink: 0, paddingTop: 8 },
+  saveLocations: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
+  saveLocationsLabel: { fontSize: 11, color: '#64748b' },
+  saveLocationLink: { fontSize: 12, color: '#0f7a56', fontWeight: '700' },
+  otpHelp: {
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+    marginVertical: 12,
   },
   carpoolNotice: {
     flexDirection: 'row',
