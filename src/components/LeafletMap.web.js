@@ -38,6 +38,13 @@ export default function LeafletMapWeb({
     pickerModeRef.current = pickerMode;
   }, [pickerMode]);
 
+  useEffect(() => {
+    if (pickerMode && mapInstanceRef.current && onCenterChange) {
+      const currentCenter = mapInstanceRef.current.getCenter();
+      onCenterChange({ lat: currentCenter.lat, lng: currentCenter.lng });
+    }
+  }, [pickerMode, loading, onCenterChange]);
+
   const validCenter = useMemo(() => (
     center && isCoordsInIndia(center.lat, center.lng)
       ? { lat: Number(center.lat), lng: Number(center.lng) }

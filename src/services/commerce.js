@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { distanceKm } from "./commerceLocations";
+import { distanceKm, RAJKOT } from "./commerceLocations";
 import { shopCategory } from "./commerceRules";
 export { stockState, deliverable } from "./commerceRules";
 
@@ -130,10 +130,14 @@ export async function discoverPlaces(type, address, signal) {
     type === "food"
       ? '["amenity"~"^(restaurant|cafe|fast_food|food_court)$"]'
       : '["shop"]';
-  const around = `(around:6000,${address.latitude},${address.longitude})`;
-  const query = `[out:json][timeout:10];(nwr${filter}["name"]${around};${type === "shops" ? `nwr["amenity"="pharmacy"]["name"]${around};` : ""});out center 100;`;
+  // Shops are discoverable across the city, independently of the delivery pin.
+  const around = type === "shops"
+    ? `(around:12000,${RAJKOT.lat},${RAJKOT.lng})`
+    : `(around:6000,${address.latitude},${address.longitude})`;
+  const query = `[out:json][timeout:10];(nwr${filter}["name"]${around};${type === "shops" ? `nwr["amenity"="pharmacy"]["name"]${around};` : ""});out center ${type === "shops" ? 500 : 100};`;
   const controller = new AbortController();
   const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
   signal?.addEventListener("abort", abort);
   const timer = setTimeout(abort, 12000);
   try {

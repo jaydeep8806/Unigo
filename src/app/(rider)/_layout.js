@@ -15,6 +15,9 @@ export default function RiderLayout() {
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
       <Stack.Screen name="donate" options={{ headerShown: false }} />
       <Stack.Screen name="nearby" options={{ headerShown: false }} />
+      <Stack.Screen name="food" options={{ headerShown: false }} />
+      <Stack.Screen name="restaurant" options={{ headerShown: false }} />
+      <Stack.Screen name="cart" options={{ headerShown: false }} />
       <Stack.Screen name="box" options={{ headerShown: false }} />
       <Stack.Screen name="homespa" options={{ headerShown: false }} />
     </Stack>

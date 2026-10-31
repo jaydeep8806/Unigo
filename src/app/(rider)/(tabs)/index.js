@@ -85,7 +85,7 @@ export default function RiderHomeScreen() {
       badge: '50% Off',
       badgeType: 'discount',
       image: FOOD_IMG,
-      onPress: () => router.push({ pathname: '/(rider)/nearby', params: { type: 'food' } }),
+      onPress: () => router.push('/(rider)/food'),
     },
     {
       id: 'shops',
@@ -422,7 +422,7 @@ export default function RiderHomeScreen() {
               </Text>
               <PressableScale
                 style={styles.foodPromoButton}
-                onPress={() => router.push({ pathname: '/(rider)/nearby', params: { type: 'food' } })}
+                onPress={() => router.push('/(rider)/food')}
               >
                 <Text style={styles.foodPromoButtonText}>Order now</Text>
                 <Ionicons

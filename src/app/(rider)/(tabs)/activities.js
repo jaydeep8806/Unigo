@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   StyleSheet,
   Text,
@@ -12,11 +13,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../../../constants/theme';
 import { CURRENCY_SYMBOL } from '../../../constants/config';
 import { useActivity } from '../../../context/ActivityProvider';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 export default function ActivitiesScreen() {
   const { rides, cancelRide, clearRides } = useActivity();
   const router = useRouter();
+  const [serviceBookings, setServiceBookings] = useState([]);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    AsyncStorage.getItem('@unigo_home_spa_demo_bookings').then((stored) => {
+      if (active) setServiceBookings(stored ? JSON.parse(stored) : []);
+    }).catch(() => { if (active) setServiceBookings([]); });
+    return () => { active = false; };
+  }, []));
 
   const handleCancel = (rideId) => {
     Alert.alert(
@@ -34,6 +43,16 @@ export default function ActivitiesScreen() {
   };
 
   const renderRideItem = ({ item }) => {
+    if (item.activityType === 'home_spa') {
+      return <View style={styles.rideCard}>
+        <View style={styles.rideHeader}><View style={styles.vehiclePill}><Ionicons name="sparkles" size={15} color={THEME.colors.primary} /><Text style={styles.vehicleTitle}>Home & Spa · Demo</Text></View><View style={[styles.statusBadge, styles.statusConfirmed]}><Text style={styles.statusTextConfirmed}>Demo booked</Text></View></View>
+        <Text style={styles.locationTitle}>{item.service}</Text>
+        <Text style={styles.locationSubtitle}>{item.provider} · {item.date} at {item.time}</Text>
+        <Text style={styles.locationSubtitle}>Service location: {item.address}</Text>
+        <View style={styles.cardFooter}><View><Text style={styles.fareAmount}>{item.price != null ? `${CURRENCY_SYMBOL}${item.price}` : 'Charge unavailable'}</Text><Text style={styles.paymentMethod}>Demo charge · no payment taken</Text></View></View>
+        <Text style={styles.locationSubtitle}>Simulation only. No provider was contacted.</Text>
+      </View>;
+    }
     const isCancelled = item.status === 'cancelled';
     const isConfirmed = ['confirmed', 'searching', 'assigned', 'arrived', 'in_progress'].includes(item.status);
     const statusLabel = { searching: 'Finding driver', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' }[item.status] || item.status;
@@ -141,24 +160,24 @@ export default function ActivitiesScreen() {
         <Text style={styles.headerTitle}>Activities</Text>
         {rides.length > 0 && (
           <TouchableOpacity onPress={clearRides} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.clearAllText}>Clear All</Text>
+            <Text style={styles.clearAllText}>Clear rides</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {rides.length === 0 ? (
+      {rides.length === 0 && serviceBookings.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.iconCircle}>
             <Ionicons name="receipt-outline" size={44} color={THEME.colors.primary} />
           </View>
-          <Text style={styles.emptyTitle}>No rides yet</Text>
+          <Text style={styles.emptyTitle}>No activities yet</Text>
           <Text style={styles.emptySubtitle}>
-            Your active bookings and trip history will appear here with live OTP and driver info.
+            Your rides and demo service bookings will appear here.
           </Text>
         </View>
       ) : (
         <FlatList
-          data={rides}
+          data={[...rides, ...serviceBookings.map((booking) => ({ ...booking, activityType: 'home_spa' }))].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))}
           keyExtractor={(item) => item.id}
           renderItem={renderRideItem}
           contentContainerStyle={styles.listContent}

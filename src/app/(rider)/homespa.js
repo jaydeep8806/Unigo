@@ -1,377 +1,255 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  Dimensions,
-} from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocation } from '../../context/LocationProvider';
-import { THEME } from '../../constants/theme';
 import { DEFAULT_CITY } from '../../constants/config';
-import { reverseGeocode } from '../../services/geocoding';
+import { THEME } from '../../constants/theme';
 import LeafletMap from '../../components/LeafletMap';
-import PressableScale from '../../components/PressableScale';
-import Toast from '../../components/Toast';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { reverseGeocode } from '../../services/geocoding';
+import { demoHomeSpaPlaces, findHomeSpaPlaces } from '../../services/homeSpa';
 
 const SERVICES = [
-  { id: 'cleaning', label: 'Cleaning', icon: 'sparkles', desc: 'Home deep cleaning & sanitization' },
-  { id: 'salon', label: 'Salon', icon: 'cut', desc: 'Haircut, facial & grooming at home' },
-  { id: 'spa', label: 'Spa', icon: 'water', desc: 'Relaxing aroma & body treatments' },
-  { id: 'massage', label: 'Massage', icon: 'body', desc: 'Therapeutic muscle & stress relief' },
+  { id: 'cleaning', label: 'Cleaning', icon: 'sparkles', description: 'Home cleaning and laundry', options: ['Home deep cleaning', 'Bathroom cleaning', 'Kitchen cleaning', 'Sofa cleaning', 'Laundry'] },
+  { id: 'salon', label: 'Salon', icon: 'cut', description: 'Hair and beauty services', options: ['Haircut', 'Facial', 'Manicure and pedicure', 'Waxing', 'Hair styling'] },
+  { id: 'spa', label: 'Spa', icon: 'water', description: 'Wellness and spa treatments', options: ['Spa treatment', 'Body scrub', 'Aromatherapy', 'Foot spa'] },
+  { id: 'massage', label: 'Massage', icon: 'body', description: 'Massage and relaxation', options: ['Full body massage', 'Head massage', 'Back massage', 'Foot massage'] },
 ];
+const DEMO_PRICES = { 'Home deep cleaning': 1499, 'Bathroom cleaning': 499, 'Kitchen cleaning': 699, 'Sofa cleaning': 799, Laundry: 299, Haircut: 299, Facial: 699, 'Manicure and pedicure': 599, Waxing: 499, 'Hair styling': 399, 'Spa treatment': 1199, 'Body scrub': 899, Aromatherapy: 999, 'Foot spa': 599, 'Full body massage': 1299, 'Head massage': 399, 'Back massage': 699, 'Foot massage': 499 };
 
 export default function HomeSpaScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { coordinates, selectedCity } = useLocation();
-
   const initialCenter = useMemo(() => {
-    if (coordinates && coordinates.latitude && coordinates.longitude) {
-      const lat = coordinates.latitude;
-      const lng = coordinates.longitude;
-      if (lat >= 6.0 && lat <= 38.5 && lng >= 68.0 && lng <= 98.0) {
-        return { lat, lng };
-      }
-    }
+    const lat = coordinates?.latitude;
+    const lng = coordinates?.longitude;
+    if (lat >= 6 && lat <= 38.5 && lng >= 68 && lng <= 98) return { lat, lng };
     const city = selectedCity || DEFAULT_CITY;
     return { lat: city.lat, lng: city.lng };
   }, [coordinates, selectedCity]);
+  const [step, setStep] = useState('service');
+  const [service, setService] = useState(null);
+  const [center, setCenter] = useState(initialCenter);
+  const [address, setAddress] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [places, setPlaces] = useState([]);
+  const [message, setMessage] = useState('');
+  const [selectedOption, setSelectedOption] = useState('');
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingTime, setBookingTime] = useState('');
+  const [bookingMessage, setBookingMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState('');
+  const [flyTo, setFlyTo] = useState(null);
+  const request = useRef(0);
+  const centerRef = useRef(initialCenter);
 
-  const [selectedService, setSelectedService] = useState('cleaning');
-  const [address, setAddress] = useState({ title: 'Loading address…', subtitle: '' });
-  const [isGeocoding, setIsGeocoding] = useState(false);
-
-  // Toast
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-
-  const geocodeTimerRef = useRef(null);
-
-  const showToast = (msg = 'Coming soon') => {
-    setToastMessage(msg);
-    setToastVisible(true);
-  };
-
-  const fetchAddress = useCallback(async (lat, lng) => {
-    setIsGeocoding(true);
-    try {
-      const geo = await reverseGeocode(lat, lng);
-      setAddress(geo);
-    } catch {
-      setAddress({
-        title: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        subtitle: 'Selected location',
-      });
-    } finally {
-      setIsGeocoding(false);
-    }
-  }, []);
-
-  // Initial geocode
   useEffect(() => {
-    let active = true;
-    const timer = setTimeout(async () => {
-      setIsGeocoding(true);
-      try {
-        const geo = await reverseGeocode(initialCenter.lat, initialCenter.lng);
-        if (active) setAddress(geo);
-      } catch {
-        if (active) {
-          setAddress({
-            title: `${initialCenter.lat.toFixed(4)}, ${initialCenter.lng.toFixed(4)}`,
-            subtitle: 'Selected location',
-          });
-        }
-      } finally {
-        if (active) setIsGeocoding(false);
-      }
-    }, 0);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
+    centerRef.current = initialCenter;
+    setCenter(initialCenter);
   }, [initialCenter]);
+  useEffect(() => () => { request.current += 1; }, []);
 
-  // Handle map center change during picker mode
-  const handleCenterChange = (c) => {
-    if (geocodeTimerRef.current) clearTimeout(geocodeTimerRef.current);
-    setIsGeocoding(true);
-    geocodeTimerRef.current = setTimeout(() => {
-      fetchAddress(c.lat, c.lng);
-    }, 600);
+  const goBack = () => {
+    request.current += 1;
+    if (step === 'results') setStep('location');
+    else if (step === 'location') setStep('service');
+    else router.back();
   };
-
-  const activeServiceObj = SERVICES.find((s) => s.id === selectedService) || SERVICES[0];
+  const locateMe = async () => {
+    setLocating(true);
+    setLocationMessage('');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') throw new Error('Location permission denied. Move the map to select a location.');
+      let timer;
+      const position = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Location timed out. Move the map to select a location.')), 15000); }),
+      ]).finally(() => clearTimeout(timer));
+      const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+      if (point.lat < 6 || point.lat > 38.5 || point.lng < 68 || point.lng > 98) throw new Error('Select a service location in India on the map.');
+      centerRef.current = point;
+      setCenter(point);
+      setFlyTo({ ...point, timestamp: Date.now() });
+    } catch (error) {
+      setLocationMessage(error.message || 'Could not get your location. Move the map to select a location.');
+    } finally { setLocating(false); }
+  };
+  const findPlaces = useCallback(async () => {
+    const current = centerRef.current;
+    const id = ++request.current;
+    setCenter(current);
+    setStep('results');
+    setLoading(true);
+    const demos = demoHomeSpaPlaces(current.lat, current.lng, service.id);
+    setPlaces(demos);
+    setSelectedPlace(null);
+    setMessage('');
+    setBookingMessage('');
+    setAddress(`Selected location (${current.lat.toFixed(4)}, ${current.lng.toFixed(4)})`);
+    reverseGeocode(current.lat, current.lng).then((geo) => {
+      if (id === request.current && geo?.title && geo.subtitle !== 'Selected point') {
+        setAddress([geo.title, geo.subtitle].filter(Boolean).join(', '));
+      }
+    }).catch(() => {});
+    try {
+      const results = await findHomeSpaPlaces(current.lat, current.lng, service.id);
+      if (id === request.current) setPlaces([...demos, ...results]);
+    } catch {
+      if (id === request.current) setMessage('Live listings are unavailable. Demo providers are still available to try.');
+    } finally {
+      if (id === request.current) setLoading(false);
+    }
+  }, [service]);
+  const callPlace = async (phone) => {
+    try { await Linking.openURL(`tel:${phone.replace(/[^+\d]/g, '')}`); } catch { setMessage('Could not open the phone app on this device.'); }
+  };
+  const markers = useMemo(() => places.map((place) => ({ ...place, label: `${place.name}${place.demo ? ' (Demo)' : ''}` })), [places]);
+  const dates = useMemo(() => Array.from({ length: 5 }, (_, index) => {
+    const day = new Date();
+    day.setDate(day.getDate() + index + 1);
+    return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+  }), []);
+  const saveDemoBooking = async () => {
+    if (!selectedOption || !bookingDate || !bookingTime || saving) return;
+    setSaving(true);
+    try {
+      const key = '@unigo_home_spa_demo_bookings';
+      const existing = JSON.parse(await AsyncStorage.getItem(key) || '[]');
+      await AsyncStorage.setItem(key, JSON.stringify([{ id: `demo-${Date.now()}`, provider: selectedPlace.name, service: selectedOption, date: bookingDate, time: bookingTime, address, coordinates: center, price: DEMO_PRICES[selectedOption], createdAt: new Date().toISOString() }, ...existing]));
+      setBookingOpen(false);
+      router.replace('/(rider)/(tabs)/activities');
+    } catch {
+      setBookingMessage('Could not save the demo booking. Please try again.');
+    } finally { setSaving(false); }
+  };
+  const changeStep = (next) => {
+    request.current += 1;
+    setLoading(false);
+    setStep(next);
+  };
 
   return (
-    <View style={styles.container}>
-      {/* Full Map with Center Picker Pin */}
-      <View style={[StyleSheet.absoluteFillObject, { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, zIndex: 0 }]}>
-        <LeafletMap
-          center={initialCenter}
-          zoom={15}
-          pickerMode={true}
-          onCenterChange={handleCenterChange}
-        />
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goBack} accessibilityRole="button" accessibilityLabel="Go back" style={styles.back}>
+          <Ionicons name="arrow-back" size={22} color={THEME.colors.textPrimary} />
+        </TouchableOpacity>
+        <View><Text style={styles.headerTitle}>Home & Spa</Text><Text style={styles.subtle}> {step === 'service' ? 'Choose a service' : step === 'location' ? 'Choose your location' : 'Nearby listings'}</Text></View>
       </View>
-
-      {/* Top Header */}
-      <SafeAreaView edges={['top']} style={styles.topContainer} pointerEvents="box-none">
-        <View style={styles.headerBar}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.circleBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={22} color={THEME.colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.titleWrap}>
-            <Text style={styles.headerTitle}>Home & Spa Services</Text>
-            <Text style={styles.headerSubtitle}>
-              Move map to select your service address
-            </Text>
-          </View>
-        </View>
-
-        {/* Horizontal Service Category Chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsScroll}
-        >
-          {SERVICES.map((s) => {
-            const isSelected = selectedService === s.id;
-            return (
-              <TouchableOpacity
-                key={s.id}
-                style={[styles.chip, isSelected && styles.chipSelected]}
-                onPress={() => setSelectedService(s.id)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={s.icon}
-                  size={16}
-                  color={isSelected ? '#FFFFFF' : THEME.colors.primary}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                  {s.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+      {step === 'service' ? (
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.heading}>What service do you need?</Text>
+          <Text style={styles.intro}>Choose a category to find nearby businesses.</Text>
+          {SERVICES.map((item) => (
+            <TouchableOpacity key={item.id} style={styles.card} accessibilityRole="button" onPress={() => { setService(item); setSelectedOption(''); setStep('location'); locateMe(); }}>
+              <View style={styles.icon}><Ionicons name={item.icon} size={24} color={THEME.colors.primaryDark} /></View>
+              <View style={styles.grow}><Text style={styles.cardTitle}>{item.label}</Text><Text style={styles.subtle}>{item.description}</Text></View>
+              <Ionicons name="chevron-forward" size={20} color={THEME.colors.mutedText} />
+            </TouchableOpacity>
+          ))}
         </ScrollView>
-      </SafeAreaView>
-
-      {/* Bottom Sheet Card */}
-      <View style={[styles.bottomSheet, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
-        <View style={styles.sheetHeader}>
-          <View style={styles.serviceIconCircle}>
-            <Ionicons name={activeServiceObj.icon} size={22} color={THEME.colors.primaryDark} />
-          </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.serviceName}>{activeServiceObj.label} at Home</Text>
-            <Text style={styles.serviceDesc}>{activeServiceObj.desc}</Text>
+      ) : step === 'location' ? (
+        <View style={styles.grow}>
+          <View style={styles.map}><LeafletMap center={center} zoom={15} pickerMode flyTo={flyTo} onCenterChange={(c) => { centerRef.current = c; }} /><View pointerEvents="none" style={styles.pickerPin}><Ionicons name="location-sharp" size={38} color={THEME.colors.primaryDark} /></View></View>
+          <View style={styles.locationPanel}>
+            <Text style={styles.cardTitle}>Where do you need {service.label.toLowerCase()}?</Text>
+            <Text style={styles.intro}>Move the map so the pin points to the service location.</Text>
+            <TouchableOpacity onPress={locateMe} disabled={locating} style={styles.secondary}><Text style={styles.secondaryText}>{locating ? 'Finding your location…' : 'Use my current location'}</Text></TouchableOpacity>
+            {locationMessage ? <Text style={styles.empty}>{locationMessage}</Text> : null}
+            <TouchableOpacity style={[styles.button, locating && styles.disabled]} disabled={locating} onPress={findPlaces} accessibilityRole="button"><Text style={styles.buttonText}>Find nearby {service.label.toLowerCase()}</Text></TouchableOpacity>
           </View>
         </View>
-
-        {/* Address confirmation block */}
-        <View style={styles.addressBox}>
-          <Ionicons
-            name="location-sharp"
-            size={22}
-            color={THEME.colors.primary}
-            style={{ marginRight: 10, marginTop: 2 }}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.addressLabel}>Service Address</Text>
-            <Text style={styles.addressTitle} numberOfLines={2}>
-              {address.title}
-            </Text>
-            {address.subtitle ? (
-              <Text style={styles.addressSubtitle} numberOfLines={1}>
-                {address.subtitle}
-              </Text>
-            ) : null}
-          </View>
-          {isGeocoding && (
-            <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginLeft: 8 }} />
-          )}
-        </View>
-
-        {/* Confirm Address Button */}
-        <PressableScale
-          style={styles.confirmBtn}
-          onPress={() => showToast('UniGo Home & Spa is coming soon!')}
-        >
-          <Text style={styles.confirmBtnText}>Confirm Address</Text>
-          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
-        </PressableScale>
-      </View>
-
-      {/* Toast */}
-      <Toast
-        visible={toastVisible}
-        message={toastMessage}
-        onHide={() => setToastVisible(false)}
-      />
-    </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.heading}>{service.label} near you</Text>
+          <Text style={styles.intro}>{address} · within 10 km</Text>
+          <Text style={styles.cardTitle}>Choose a service</Text>
+          <Text style={styles.subtle}>Select what you need, then choose a nearby business on the map or in the list.</Text>
+          <View style={styles.options}>{service.options.map((option) => <TouchableOpacity key={option} accessibilityRole="button" accessibilityState={{ selected: selectedOption === option }} style={[styles.option, selectedOption === option && styles.optionSelected]} onPress={() => setSelectedOption(option)}><Text style={[styles.optionText, selectedOption === option && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
+          <View style={styles.resultsMap}><LeafletMap center={center} zoom={12} markers={markers} onMarkerPress={(marker) => setSelectedPlace(marker)} /></View>
+          <Text style={styles.notice}>Demo providers and their map locations are fictional. Demo bookings are saved on this device and do not contact a provider. Live listings require direct confirmation.</Text>
+          {bookingMessage ? <Text style={styles.notice}>{bookingMessage}</Text> : null}
+          {selectedPlace ? <View style={styles.selectedCard}>
+            <Text style={styles.cardTitle}>{selectedPlace.name}{selectedPlace.demo ? ' · Demo' : ''}</Text>
+            <Text style={styles.subtle}>{selectedPlace.type.replace(/_/g, ' ')} · {selectedOption || service.label}</Text>
+            <Text style={styles.subtle}>Service location: {address}</Text>
+            {selectedPlace.demo ? <TouchableOpacity style={styles.button} onPress={() => { setBookingDate(''); setBookingTime(''); setBookingMessage(''); setBookingOpen(true); }} accessibilityRole="button"><Text style={styles.buttonText}>Book demo service</Text></TouchableOpacity> : selectedPlace.phone ? <TouchableOpacity style={styles.button} onPress={() => callPlace(selectedPlace.phone)} accessibilityRole="button"><Text style={styles.buttonText}>Call to arrange booking</Text></TouchableOpacity> : <Text style={styles.empty}>No phone number is available for this listing, so a booking cannot be arranged here.</Text>}
+          </View> : null}
+          <Text style={styles.cardTitle}>Nearby businesses</Text>
+          {loading ? <View style={styles.loadingRow}><ActivityIndicator color={THEME.colors.primary} /><Text style={styles.subtle}> Looking for live businesses…</Text></View> : null}
+          {places.length ? places.map((place) => (
+            <View key={place.id} style={styles.card}>
+              <View style={styles.icon}><Ionicons name="business-outline" size={22} color={THEME.colors.primaryDark} /></View>
+              <View style={styles.grow}><Text style={styles.cardTitle}>{place.name}{place.demo ? ' · Demo' : ''}</Text><Text style={styles.subtle}>{place.type.replace(/_/g, ' ')}</Text>{place.phone ? <Text style={styles.subtle}>{place.phone}</Text> : null}</View>
+              <TouchableOpacity onPress={() => setSelectedPlace(place)} accessibilityRole="button" accessibilityLabel={`Select ${place.name}`}><Text style={styles.secondaryText}>Select</Text></TouchableOpacity>
+            </View>
+          )) : <Text style={styles.empty}>{message || 'No named listings found. Try another location or service, or check your connection.'}</Text>}
+          {message && places.length > 0 ? <Text style={styles.empty}>{message}</Text> : null}
+          {!loading && <TouchableOpacity style={styles.secondary} onPress={findPlaces}><Text style={styles.secondaryText}>Try again</Text></TouchableOpacity>}
+          <TouchableOpacity style={styles.secondary} onPress={() => changeStep('location')}><Text style={styles.secondaryText}>Change location</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.secondary} onPress={() => changeStep('service')}><Text style={styles.secondaryText}>Choose another service</Text></TouchableOpacity>
+        </ScrollView>
+      )}
+      <Modal visible={bookingOpen} animationType="slide" onRequestClose={() => setBookingOpen(false)}>
+        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}><ScrollView contentContainerStyle={styles.content}>
+          <TouchableOpacity onPress={() => setBookingOpen(false)} accessibilityRole="button"><Text style={styles.secondaryText}>← Back</Text></TouchableOpacity>
+          <Text style={styles.heading}>Book a demo service</Text>
+          <Text style={styles.notice}>This is a simulation. No appointment is sent to a provider and no payment is taken.</Text>
+          <Text style={styles.cardTitle}>{selectedPlace?.name} · Demo</Text>
+          <Text style={styles.subtle}>Service location: {address}</Text>
+          <Text style={styles.cardTitle}>Choose a service</Text>
+          <View style={styles.options}>{service?.options.map((option) => <TouchableOpacity key={option} onPress={() => setSelectedOption(option)} style={[styles.option, selectedOption === option && styles.optionSelected]}><Text style={[styles.optionText, selectedOption === option && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
+          <Text style={styles.cardTitle}>Choose a date</Text>
+          <View style={styles.options}>{dates.map((date) => <TouchableOpacity key={date} onPress={() => setBookingDate(date)} style={[styles.option, bookingDate === date && styles.optionSelected]}><Text style={[styles.optionText, bookingDate === date && styles.optionTextSelected]}>{date}</Text></TouchableOpacity>)}</View>
+          <Text style={styles.cardTitle}>Choose a time</Text>
+          <View style={styles.options}>{['9:00 AM', '11:00 AM', '2:00 PM', '4:00 PM'].map((time) => <TouchableOpacity key={time} onPress={() => setBookingTime(time)} style={[styles.option, bookingTime === time && styles.optionSelected]}><Text style={[styles.optionText, bookingTime === time && styles.optionTextSelected]}>{time}</Text></TouchableOpacity>)}</View>
+          {selectedOption ? <Text style={styles.notice}>Demo service charge: ₹{DEMO_PRICES[selectedOption]} · No payment will be collected.</Text> : null}
+          <TouchableOpacity disabled={!selectedOption || !bookingDate || !bookingTime || saving} style={[styles.button, (!selectedOption || !bookingDate || !bookingTime || saving) && styles.disabled]} onPress={saveDemoBooking}><Text style={styles.buttonText}>{saving ? 'Saving…' : 'Confirm demo booking'}</Text></TouchableOpacity>
+          {bookingMessage ? <Text style={styles.empty}>{bookingMessage}</Text> : null}
+        </ScrollView></SafeAreaView>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F7F5',
-  },
-  topContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    zIndex: 20,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  circleBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: THEME.colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...THEME.shadows.soft,
-  },
-  titleWrap: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: THEME.fontWeights.extrabold,
-    color: THEME.colors.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: THEME.colors.mutedText,
-    marginTop: 1,
-  },
-  chipsScroll: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.colors.white,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: THEME.radius.pill,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    ...THEME.shadows.soft,
-  },
-  chipSelected: {
-    backgroundColor: THEME.colors.primary,
-    borderColor: THEME.colors.primary,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: THEME.fontWeights.semibold,
-    color: THEME.colors.textPrimary,
-  },
-  chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: THEME.fontWeights.bold,
-  },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: THEME.colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    ...THEME.shadows.floating,
-    zIndex: 30,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  serviceIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E6F4EA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  serviceName: {
-    fontSize: 15,
-    fontWeight: THEME.fontWeights.extrabold,
-    color: THEME.colors.textPrimary,
-  },
-  serviceDesc: {
-    fontSize: 12,
-    color: THEME.colors.mutedText,
-    marginTop: 2,
-  },
-  addressBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: THEME.colors.tile,
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  addressLabel: {
-    fontSize: 10,
-    fontWeight: THEME.fontWeights.bold,
-    color: THEME.colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  addressTitle: {
-    fontSize: 14,
-    fontWeight: THEME.fontWeights.bold,
-    color: THEME.colors.textPrimary,
-  },
-  addressSubtitle: {
-    fontSize: 11,
-    color: THEME.colors.mutedText,
-    marginTop: 2,
-  },
-  confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: THEME.colors.primaryDark,
-    paddingVertical: 15,
-    borderRadius: THEME.radius.pill,
-    ...THEME.shadows.card,
-  },
-  confirmBtnText: {
-    fontSize: 15,
-    fontWeight: THEME.fontWeights.extrabold,
-    color: '#FFFFFF',
-  },
+  screen: { flex: 1, backgroundColor: '#F5F8F6' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', gap: 12 },
+  back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: THEME.colors.textPrimary },
+  content: { padding: 20, paddingBottom: 36 },
+  heading: { fontSize: 24, fontWeight: '800', color: THEME.colors.textPrimary, marginBottom: 6 },
+  intro: { fontSize: 14, color: THEME.colors.mutedText, lineHeight: 21, marginBottom: 18 },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, gap: 12, borderWidth: 1, borderColor: THEME.colors.border },
+  icon: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#E6F4EA', alignItems: 'center', justifyContent: 'center' },
+  grow: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: THEME.colors.textPrimary },
+  subtle: { fontSize: 12, color: THEME.colors.mutedText, marginTop: 3 },
+  map: { flex: 1, minHeight: 220 },
+  pickerPin: { position: 'absolute', left: '50%', top: '50%', marginLeft: -19, marginTop: -38 },
+  resultsMap: { height: 260, borderRadius: 16, overflow: 'hidden' },
+  selectedCard: { backgroundColor: '#fff', borderColor: THEME.colors.primary, borderWidth: 1, borderRadius: 16, padding: 16, gap: 10, marginBottom: 16 },
+  locationPanel: { padding: 20, backgroundColor: '#fff' },
+  button: { backgroundColor: THEME.colors.primaryDark, borderRadius: 28, alignItems: 'center', padding: 16 },
+  buttonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  disabled: { opacity: 0.5 },
+  notice: { color: '#53645B', backgroundColor: '#E6F4EA', borderRadius: 12, padding: 12, lineHeight: 19, marginVertical: 16, fontSize: 13 },
+  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 16 },
+  option: { borderWidth: 1, borderColor: THEME.colors.border, backgroundColor: '#fff', borderRadius: 20, paddingVertical: 9, paddingHorizontal: 12 },
+  optionSelected: { backgroundColor: THEME.colors.primaryDark, borderColor: THEME.colors.primaryDark },
+  optionText: { color: THEME.colors.textPrimary, fontSize: 13 },
+  optionTextSelected: { color: '#fff' },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 24 },
+  empty: { color: THEME.colors.mutedText, lineHeight: 21, marginVertical: 20 },
+  secondary: { alignItems: 'center', padding: 13 },
+  secondaryText: { color: THEME.colors.primaryDark, fontWeight: '700' },
 });
+

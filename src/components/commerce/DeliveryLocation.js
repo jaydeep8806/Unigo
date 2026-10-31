@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Location from "expo-location";
+import { Ionicons } from "@expo/vector-icons";
 import LeafletMap from "../LeafletMap";
 import {
   RAJKOT,
@@ -22,18 +23,20 @@ export default function DeliveryLocation({
   saved,
   onSelect,
   onClose,
+  autoLocate = false,
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState("search");
+  const [mode, setMode] = useState(autoLocate ? "map" : "search");
   const [draft, setDraft] = useState(null);
   const [mapStart] = useState(
     current ? { lat: current.latitude, lng: current.longitude } : RAJKOT,
   );
   const pin = useRef(mapStart);
+  const [flyTo, setFlyTo] = useState(null);
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -68,7 +71,7 @@ export default function DeliveryLocation({
       setBusy(false);
     }
   }
-  async function locate() {
+  const locate = useCallback(async () => {
     setBusy(true);
     setError("");
     try {
@@ -81,22 +84,29 @@ export default function DeliveryLocation({
         throw new Error(
           "Turn on device location, or search for your address below.",
         );
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setDraft(
-        await resolveAddress(
-          position.coords.latitude,
-          position.coords.longitude,
-        ),
-      );
-      setMode("confirm");
+      let timer;
+      const position = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Location timed out. Move the map to choose a location.")), 15000); }),
+      ]).finally(() => clearTimeout(timer));
+      const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+      if (!inRajkot({ latitude: point.lat, longitude: point.lng })) throw new Error(SERVICE_MESSAGE);
+      pin.current = point;
+      setFlyTo({ ...point, timestamp: Date.now() });
+      setMode("map");
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
+  const started = useRef(false);
+  useEffect(() => {
+    if (autoLocate && !started.current) {
+      started.current = true;
+      locate();
+    }
+  }, [autoLocate, locate]);
   async function confirm() {
     if (!inRajkot(draft)) {
       setError(SERVICE_MESSAGE);
@@ -129,16 +139,21 @@ export default function DeliveryLocation({
               center={mapStart}
               pickerMode
               zoom={16}
+              flyTo={flyTo}
               onCenterChange={(p) => {
                 pin.current = p;
               }}
               onDraggingChange={setDragging}
             />
+            <View pointerEvents="none" style={{ position: "absolute", left: "50%", top: "50%", marginLeft: -19, marginTop: -38 }}>
+              <Ionicons name="location-sharp" size={38} color="#0F7A56" />
+            </View>
           </View>
           <View style={s.footer}>
             <Text style={s.muted}>
               Move the map to place the pin at your entrance.
             </Text>
+            <Button secondary title={busy ? "Finding your location…" : "Use my current location"} disabled={busy} onPress={locate} />
             <Button
               title={busy ? "Finding address…" : "Confirm this location"}
               disabled={busy || dragging}

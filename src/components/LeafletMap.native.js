@@ -388,7 +388,13 @@ function generateMapHTML(center, zoom, markers, route, pickerMode, fitBounds) {
       // Global update function called from React Native
       window.__updateMap=function(data){
         if(data.pickerMode!==undefined) {
-          if (data.pickerMode && !isPickerMode) lastBoundsKey = null;
+          if (data.pickerMode && !isPickerMode) {
+            lastBoundsKey = null;
+            var pickerCenter = map.getCenter();
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'CENTER_CHANGE', lat: pickerCenter.lat, lng: pickerCenter.lng
+            }));
+          }
           isPickerMode = Boolean(data.pickerMode);
         }
 

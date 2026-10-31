@@ -33,6 +33,7 @@ export default function NearbyCommerce() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const type = params.type === "shops" ? "shops" : "food";
+  const [startInShops] = useState(type === "shops");
   const [address, setAddress] = useState(null);
   const [saved, setSaved] = useState([]);
   const [selecting, setSelecting] = useState(false);
@@ -61,7 +62,7 @@ export default function NearbyCommerce() {
         );
         setSaved(valid);
         setAddress(inRajkot(data.current) ? data.current : null);
-        setSelecting(!inRajkot(data.current));
+        setSelecting(startInShops || !inRajkot(data.current));
       })
       .catch(() => {
         if (live) setSelecting(true);
@@ -79,7 +80,7 @@ export default function NearbyCommerce() {
       live = false;
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [startInShops]);
   useEffect(() => {
     if (!user) return;
     let live = true;
@@ -235,6 +236,7 @@ export default function NearbyCommerce() {
             onPress={() => {
               setCategory("All");
               router.setParams({ type: "shops" });
+              if (type !== "shops") setSelecting(true);
             }}
           />
           <Button secondary title="My orders" onPress={viewOrders} />
@@ -244,6 +246,7 @@ export default function NearbyCommerce() {
         <LeafletMap
           key={address ? `${address.latitude}-${address.longitude}` : "rajkot"}
           center={center}
+          zoom={type === "shops" ? 12 : 14}
           markers={visible.map((p) => ({
             id: p.id,
             lat: p.latitude,
@@ -291,7 +294,9 @@ export default function NearbyCommerce() {
                 {address ? `(${visible.length})` : ""}
               </Text>
               <Text style={s.muted}>
-                Delivery partners first · Map discoveries within 6 km
+                {type === "shops"
+                  ? "Delivery partners first · Map discoveries across Rajkot"
+                  : "Delivery partners first · Map discoveries within 6 km"}
               </Text>
               <Field
                 placeholder={
@@ -445,6 +450,7 @@ export default function NearbyCommerce() {
         <DeliveryLocation
           current={address}
           saved={saved}
+          autoLocate={type === "shops"}
           onSelect={select}
           onClose={() => setSelecting(false)}
         />

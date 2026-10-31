@@ -71,6 +71,7 @@ export default function BoxScreen() {
   // Pin picker
   const [isPickerMode, setIsPickerMode] = useState(false);
   const [pickerCoords, setPickerCoords] = useState(null);
+  const handleCenterChange = useCallback((coords) => setPickerCoords(coords), []);
 
   // Route
   const [routeCoords, setRouteCoords] = useState([]);
@@ -179,6 +180,7 @@ export default function BoxScreen() {
         title: 'Selected Drop Location',
       };
       setDestination(dest);
+      setSearchQuery(dest.title);
       await calculateRoute(origin, dest);
     }
   };
@@ -229,12 +231,22 @@ export default function BoxScreen() {
           center={{ lat: origin.latitude, lng: origin.longitude }}
           zoom={14}
           markers={markers}
-          route={routeCoords}
+          route={isPickerMode ? [] : routeCoords}
           pickerMode={isPickerMode}
-          onCenterChange={(c) => setPickerCoords(c)}
+          onCenterChange={handleCenterChange}
           fitBounds={fitBounds}
         />
       </View>
+
+      {isPickerMode && (
+        <View style={styles.centerPinWrapper} pointerEvents="none">
+          <View style={styles.centerTooltip}>
+            <Text style={styles.centerTooltipText}>Drop location</Text>
+            <Text style={styles.centerTooltipSub}>Drag the map or tap to move</Text>
+          </View>
+          <Ionicons name="location" size={44} color="#EF4444" />
+        </View>
+      )}
 
       {/* Top Header Card */}
       <SafeAreaView edges={['top']} style={styles.topContainer} pointerEvents="box-none">
@@ -255,6 +267,7 @@ export default function BoxScreen() {
           <TouchableOpacity
             style={[styles.pinToggleBtn, isPickerMode && styles.pinToggleBtnActive]}
             onPress={() => {
+              if (!isPickerMode) setPickerCoords(null);
               setIsPickerMode(!isPickerMode);
               setShowSearchResults(false);
               Keyboard.dismiss();
@@ -335,7 +348,7 @@ export default function BoxScreen() {
 
       {/* Floating Confirm Button for Pin Picker */}
       {isPickerMode && (
-        <View style={styles.pickerConfirmWrap}>
+        <View style={[styles.pickerConfirmWrap, { bottom: Math.max(30, insets.bottom + 8) }]}>
           <PressableScale style={styles.confirmPinBtn} onPress={handleConfirmPicker}>
             <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
             <Text style={styles.confirmPinText}>Set as Parcel Drop Location</Text>
@@ -457,6 +470,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F4F7F5',
   },
+  centerPinWrapper: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 160,
+    marginLeft: -80,
+    marginTop: -44,
+    alignItems: 'center',
+    zIndex: 15,
+  },
+  centerTooltip: {
+    position: 'absolute',
+    bottom: 50,
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  centerTooltipText: { color: '#FFFFFF', fontSize: 11, fontWeight: THEME.fontWeights.bold },
+  centerTooltipSub: { color: '#CBD5E1', fontSize: 10 },
   topContainer: {
     position: 'absolute',
     top: 0,
