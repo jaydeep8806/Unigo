@@ -258,18 +258,20 @@ export default function RiderHomeScreen() {
             </PressableScale>
           </View>
 
-          {/* "Where to?" Search Bar */}
+          {/* Unified Super App Search Bar */}
           <PressableScale
             style={styles.searchBar}
             onPress={() => router.push('/(rider)/book')}
-            accessibilityLabel="Search destination"
+            accessibilityLabel="Search rides, food, spa, or destination"
           >
             <View style={styles.searchIconBox}>
               <Ionicons name="search" size={18} color={THEME.colors.primary} />
             </View>
-            <Text style={styles.searchPlaceholder}>Where to?</Text>
+            <Text style={styles.searchPlaceholder} numberOfLines={1}>
+              Search rides, food, spa, shops...
+            </Text>
             <View style={styles.bookPill}>
-              <Text style={styles.bookPillText}>Ride Now</Text>
+              <Text style={styles.bookPillText}>Explore</Text>
             </View>
           </PressableScale>
         </LinearGradient>

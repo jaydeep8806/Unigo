@@ -27,16 +27,29 @@ export function shopCategory(tags) {
 }
 
 export function stockState(product) {
-  if (!product.available || product.stock_quantity <= 0) return "OUT_OF_STOCK";
-  return product.stock_quantity <= product.low_stock_threshold
-    ? "LOW_STOCK"
-    : "IN_STOCK";
+  if (!product || !product.available || (product.stock_quantity ?? 0) <= 0) {
+    return "OUT_OF_STOCK";
+  }
+  const threshold = product.low_stock_threshold ?? 5;
+  return product.stock_quantity <= threshold ? "LOW_STOCK" : "IN_STOCK";
 }
 
 export function deliverable(store, address) {
-  return (
-    inRajkot(address) &&
-    store.status === "open" &&
-    distanceKm(address, store) <= store.delivery_radius
-  );
+  if (!store || !address) return false;
+  
+  // Store must be actively accepting orders
+  if (store.status !== "open") return false;
+
+  // In-service validation: checks store/address zone or defaults to inRajkot launch check
+  const inServiceZone = store.city
+    ? (address.city ? store.city.toLowerCase() === address.city.toLowerCase() : inRajkot(address))
+    : inRajkot(address);
+
+  if (!inServiceZone) return false;
+
+  const distance = distanceKm(address, store);
+  const maxRadius = Number(store.delivery_radius ?? 5);
+
+  return distance <= maxRadius;
 }
+
