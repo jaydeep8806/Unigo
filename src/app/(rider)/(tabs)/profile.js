@@ -62,6 +62,7 @@ export default function ProfileScreen() {
           <Text style={styles.resetButtonText}>Manage location permission</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.resetButton} onPress={() => router.push('/(rider)/(tabs)/activities')}><Ionicons name="receipt-outline" size={18} color={THEME.colors.primary} /><Text style={styles.infoLabel}>  Ride history</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.resetButton} onPress={() => router.push('/role-selection')}><Ionicons name="swap-horizontal" size={18} color={THEME.colors.primary} /><Text style={styles.infoLabel}>  Switch user / driver</Text></TouchableOpacity>
         <TouchableOpacity style={styles.resetButton} onPress={logout}><Ionicons name="log-out-outline" size={18} color={THEME.colors.danger} /><Text style={styles.resetButtonText}>  End guest session</Text></TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { asActivity, driverAction, simulationEnabled, watchRides } from '../services/drivers';
+import { supabase } from '../services/supabase';
 
 const STORAGE_KEY_RIDES = '@unigo_user_rides';
 
@@ -43,23 +45,51 @@ export function ActivityProvider({ children }) {
     }
   }, []);
 
-  const addRide = useCallback(async (rideData) => {
-    const newRide = {
-      id: `ride_${Date.now()}`,
-      status: 'confirmed', // 'confirmed', 'completed', 'cancelled'
-      createdAt: new Date().toISOString(),
-      otp: Math.floor(1000 + Math.random() * 9000).toString(),
-      driver: {
-        name: 'Ramesh Patel',
-        rating: '4.8',
-        trips: '1,420',
-        vehicleNumber: 'GJ-03-AX-8924',
-        vehicleModel: rideData.vehicleName || 'UniGo Ride',
-      },
-      ...rideData,
+  useEffect(() => {
+    if (!isLoaded) return undefined;
+    let disposed = false; let stop = () => {}; let generation = 0;
+    const attach = async (session) => {
+      const current = ++generation;
+      let pending = false;
+      stop();
+      if (disposed) return;
+      if (!session) {
+        const local = ridesRef.current.filter(r => !r.backend);
+        ridesRef.current = local; setRides(local);
+        return;
+      }
+      const refresh = async () => {
+        if (pending || disposed || current !== generation) return;
+        pending = true;
+        try {
+          const { data, error } = await supabase.from('driver_rides').select('*').eq('rider_id', session.user.id).order('created_at', { ascending: false }).limit(100);
+          if (error) return;
+          const rows = [];
+          for (const row of data) rows.push(['searching','requested','assigned','arrived','in_progress'].includes(row.status) ? await driverAction('sync', { id: row.id }) : row);
+          if (disposed || current !== generation) return;
+          const merged = rows.map(row => {
+            const old = ridesRef.current.find(r => r.id === row.id);
+            const next = { ...old, ...asActivity(row) };
+            if (row.status === 'completed' && ['payment_pending','paid','rated'].includes(old?.status)) next.status = old.status;
+            return next;
+          });
+          const updated = [...merged, ...ridesRef.current.filter(r => !r.backend)];
+          ridesRef.current = updated; setRides(updated); await persist(updated);
+        } catch { /* Preserve cached history when disconnected; trip screen shows connection errors. */ }
+        finally { pending = false; }
+      };
+      await refresh();
+      if (!disposed && current === generation) stop = watchRides(`rider_id=eq.${session.user.id}`, refresh);
     };
+    supabase.auth.getSession().then(({ data }) => attach(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { setTimeout(() => { if (!disposed) attach(session); }, 0); });
+    return () => { disposed = true; stop(); listener.subscription.unsubscribe(); };
+  }, [isLoaded, persist]);
 
-    const updated = [newRide, ...ridesRef.current];
+  const addRide = useCallback(async (rideData) => {
+    const newRide = asActivity(await driverAction('request', { ...rideData, simulated: simulationEnabled }));
+
+    const updated = [newRide, ...ridesRef.current.filter(r => r.id !== newRide.id)];
     ridesRef.current = updated;
     setRides(updated);
     await persist(updated);
@@ -74,6 +104,7 @@ export function ActivityProvider({ children }) {
   }, [persist]);
 
   const cancelRide = useCallback(async (rideId) => {
+    if (ridesRef.current.find(r => r.id === rideId)?.backend) await driverAction('cancel', { id: rideId });
     const updated = ridesRef.current.map((r) =>
       r.id === rideId ? { ...r, status: 'cancelled' } : r
     );

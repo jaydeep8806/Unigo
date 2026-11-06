@@ -17,6 +17,7 @@ import { foodImage } from '../../data/foodImages';
 import { THEME } from '../../constants/theme';
 import PressableScale from '../../components/PressableScale';
 import { RESTAURANTS } from '../../data/restaurants';
+import { useFoodCart } from '../../context/FoodCartProvider';
 
 const { width: SW } = Dimensions.get('window');
 const ratingColor = (r) => (r >= 4 ? '#22C55E' : r >= 3 ? '#F59E0B' : '#EF4444');
@@ -31,38 +32,12 @@ export default function RestaurantScreen() {
     [id]
   );
 
-  const [cart, setCart] = useState({}); // { itemId: qty }
+  const { quantities: cart, totalItems, itemTotal: cartTotal, updateQuantity } = useFoodCart();
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ── Cart helpers ─────────────────────────────────────────────────────
-  const addToCart = (itemId) =>
-    setCart((prev) => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
-  const removeFromCart = (itemId) =>
-    setCart((prev) => {
-      const next = { ...prev };
-      if (next[itemId] > 1) next[itemId]--;
-      else delete next[itemId];
-      return next;
-    });
-
-  const totalItems = Object.values(cart).reduce((s, q) => s + q, 0);
-
-  // Get all menu items flat for cart total
-  const allItems = useMemo(() => {
-    const map = {};
-    restaurant?.menu.forEach((cat) =>
-      cat.items.forEach((item) => {
-        map[item.id] = item;
-      })
-    );
-    return map;
-  }, [restaurant]);
-
-  const cartTotal = Object.entries(cart).reduce(
-    (sum, [itemId, qty]) => sum + (allItems[itemId]?.price || 0) * qty,
-    0
-  );
+  const addToCart = useCallback((itemId) => updateQuantity(itemId, 1), [updateQuantity]);
+  const removeFromCart = useCallback((itemId) => updateQuantity(itemId, -1), [updateQuantity]);
 
   // ── Filter menu by search ───────────────────────────────────────────
   const sections = useMemo(() => {
@@ -161,7 +136,7 @@ export default function RestaurantScreen() {
         </View>
       );
     },
-    [cart, restaurant?.category, restaurant?.informationOnly]
+    [cart, restaurant, addToCart, removeFromCart]
   );
 
   // ── Section header ──────────────────────────────────────────────────
@@ -317,13 +292,7 @@ export default function RestaurantScreen() {
             <PressableScale
               style={styles.cartBtn}
               onPress={() =>
-                router.push({
-                  pathname: '/(rider)/cart',
-                  params: {
-                    restaurantId: restaurant.id,
-                    cart: JSON.stringify(cart),
-                  },
-                })
+                router.push('/(rider)/cart')
               }
             >
               <Text style={styles.cartBtnText}>View Cart</Text>
@@ -762,4 +731,5 @@ const styles = StyleSheet.create({
     height: 42,
   },
 });
+
 

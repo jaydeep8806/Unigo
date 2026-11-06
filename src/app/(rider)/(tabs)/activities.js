@@ -19,11 +19,15 @@ export default function ActivitiesScreen() {
   const { rides, cancelRide, clearRides } = useActivity();
   const router = useRouter();
   const [serviceBookings, setServiceBookings] = useState([]);
+  const [shopOrders, setShopOrders] = useState([]);
   useFocusEffect(useCallback(() => {
     let active = true;
     AsyncStorage.getItem('@unigo_home_spa_demo_bookings').then((stored) => {
       if (active) setServiceBookings(stored ? JSON.parse(stored) : []);
     }).catch(() => { if (active) setServiceBookings([]); });
+    AsyncStorage.getItem('@unigo_shop_demo_orders').then((stored) => {
+      if (active) setShopOrders(stored ? JSON.parse(stored) : []);
+    }).catch(() => { if (active) setShopOrders([]); });
     return () => { active = false; };
   }, []));
 
@@ -36,13 +40,23 @@ export default function ActivitiesScreen() {
         {
           text: 'Yes, Cancel',
           style: 'destructive',
-          onPress: () => cancelRide(rideId),
+          onPress: () => cancelRide(rideId).catch(e => Alert.alert('Could not cancel ride', e.message)),
         },
       ]
     );
   };
 
   const renderRideItem = ({ item }) => {
+    if (item.activityType === 'shop_demo') {
+      return <View style={styles.rideCard}>
+        <View style={styles.rideHeader}><View style={styles.vehiclePill}><Ionicons name="basket" size={15} color={THEME.colors.primary} /><Text style={styles.vehicleTitle}>Shop · Simulation</Text></View><View style={[styles.statusBadge, styles.statusConfirmed]}><Text style={styles.statusTextConfirmed}>Simulated order</Text></View></View>
+        <Text style={styles.locationTitle}>{item.store}</Text>
+        <Text style={styles.locationSubtitle}>{item.items.map((line) => `${line.quantity} × ${line.name}`).join(', ')}</Text>
+        <Text style={styles.locationSubtitle}>Delivery address: {item.address}</Text>
+        <View style={styles.cardFooter}><View><Text style={styles.fareAmount}>{CURRENCY_SYMBOL}{item.total}</Text><Text style={styles.paymentMethod}>Simulated total · no payment taken</Text></View></View>
+        <Text style={styles.locationSubtitle}>Simulation only. No shop was contacted or delivery arranged.</Text>
+      </View>;
+    }
     if (item.activityType === 'home_spa') {
       return <View style={styles.rideCard}>
         <View style={styles.rideHeader}><View style={styles.vehiclePill}><Ionicons name="sparkles" size={15} color={THEME.colors.primary} /><Text style={styles.vehicleTitle}>Home & Spa · Demo</Text></View><View style={[styles.statusBadge, styles.statusConfirmed]}><Text style={styles.statusTextConfirmed}>Demo booked</Text></View></View>
@@ -54,8 +68,8 @@ export default function ActivitiesScreen() {
       </View>;
     }
     const isCancelled = item.status === 'cancelled';
-    const isConfirmed = ['confirmed', 'searching', 'assigned', 'arrived', 'in_progress'].includes(item.status);
-    const statusLabel = { searching: 'Finding driver', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' }[item.status] || item.status;
+    const isConfirmed = ['confirmed', 'searching', 'requested', 'assigned', 'arrived', 'in_progress'].includes(item.status);
+    const statusLabel = { searching: 'Finding driver', requested: 'Awaiting acceptance', unavailable: 'No drivers available', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' }[item.status] || item.status;
 
     return (
       <TouchableOpacity style={styles.rideCard} onPress={() => router.push({ pathname: '/(rider)/trip', params: { id: item.id } })} activeOpacity={0.85}>
@@ -165,19 +179,19 @@ export default function ActivitiesScreen() {
         )}
       </View>
 
-      {rides.length === 0 && serviceBookings.length === 0 ? (
+      {rides.length === 0 && serviceBookings.length === 0 && shopOrders.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.iconCircle}>
             <Ionicons name="receipt-outline" size={44} color={THEME.colors.primary} />
           </View>
           <Text style={styles.emptyTitle}>No activities yet</Text>
           <Text style={styles.emptySubtitle}>
-            Your rides and demo service bookings will appear here.
+            Your rides, service bookings and simulated shop orders will appear here.
           </Text>
         </View>
       ) : (
         <FlatList
-          data={[...rides, ...serviceBookings.map((booking) => ({ ...booking, activityType: 'home_spa' }))].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))}
+          data={[...rides, ...serviceBookings.map((booking) => ({ ...booking, activityType: 'home_spa' })), ...shopOrders.map((order) => ({ ...order, activityType: 'shop_demo' }))].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))}
           keyExtractor={(item) => item.id}
           renderItem={renderRideItem}
           contentContainerStyle={styles.listContent}

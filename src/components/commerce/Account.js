@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import { Text, ScrollView } from "react-native";
 import { supabase } from "../../services/supabase";
+import { accountErrorMessage } from "../../services/authErrors";
 import { Sheet, Field, Button, s } from "./UI";
 
-export default function Account({ onClose, onSignedIn }) {
+export default function Account({ onClose, onSignedIn, accountName = 'Food & Shop' }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signup, setSignup] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit() {
+    if (busy) return;
     setBusy(true);
     setMessage("");
     try {
@@ -22,14 +24,14 @@ export default function Account({ onClose, onSignedIn }) {
       else
         setMessage("Check your email to confirm your account, then sign in.");
     } catch (e) {
-      setMessage(e.message);
+      setMessage(accountErrorMessage(e));
     } finally {
       setBusy(false);
     }
   }
   return (
     <Sheet
-      title={signup ? "Create Food & Shop account" : "Food & Shop sign in"}
+      title={signup ? `Create ${accountName} account` : `${accountName} sign in`}
       onClose={onClose}
     >
       <ScrollView
@@ -37,8 +39,7 @@ export default function Account({ onClose, onSignedIn }) {
         contentContainerStyle={{ padding: 20, gap: 12 }}
       >
         <Text style={s.muted}>
-          Sign in to place orders or manage your assigned shop. Browsing does
-          not require an account.
+          {accountName === 'UNIGO' ? 'Sign in to link your driver profile to an account you can use on another device.' : 'Sign in to place orders or manage your assigned shop. Browsing does not require an account.'}
         </Text>
         <Field
           label="Email"
@@ -61,6 +62,7 @@ export default function Account({ onClose, onSignedIn }) {
         />
         <Button
           secondary
+          disabled={busy}
           title={signup ? "Already registered? Sign in" : "Create an account"}
           onPress={() => setSignup(!signup)}
         />

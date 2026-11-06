@@ -91,7 +91,7 @@ export default function RiderHomeScreen() {
       id: 'shops',
       title: 'Shops',
       image: SHOPS_IMG,
-      onPress: () => router.push({ pathname: '/(rider)/nearby', params: { type: 'shops' } }),
+      onPress: () => router.push('/(rider)/shop-demo'),
     },
     {
       id: 'homespa',

@@ -203,7 +203,7 @@ export default function Inventory({ user, onClose }) {
                           action(async () => {
                             const { error: err } = await supabase.rpc(
                               "commerce_advance_order",
-                              { order_id: o.id },
+                              { order_id: o.id, expected_status: o.status },
                             );
                             if (err) throw err;
                           })

@@ -1,3 +1,4 @@
+import { simulationEnabled } from '../../services/drivers';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
@@ -433,8 +434,8 @@ export default function BookScreen() {
 
       setReviewRide(false);
       router.push({ pathname: '/(rider)/trip', params: { id: ride.id } });
-    } catch {
-      setReviewError('Could not complete booking. Please try again.');
+    } catch (e) {
+      setReviewError(e.message || 'Could not complete booking. Please try again.');
     } finally {
       setBookingInProgress(false);
     }
@@ -914,7 +915,7 @@ export default function BookScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <View style={styles.demoNotice}><Ionicons name="information-circle-outline" size={19} color="#0f7a56" /><Text style={styles.demoNoticeText}>This is a demo booking. Driver details and the ride OTP are simulated.</Text></View>
+            <View style={styles.demoNotice}><Ionicons name="information-circle-outline" size={19} color="#0f7a56" /><Text style={styles.demoNoticeText}>{simulationEnabled ? 'Simulated booking · no human driver will arrive.' : 'Your request goes to an available, compatible driver near your pickup. Wait for acceptance before travelling.'}</Text></View>
             {!!reviewError && <Text style={styles.reviewError}>{reviewError}</Text>}
           </ScrollView>
           <View style={[styles.reviewFooter, { paddingBottom: Math.max(14, insets.bottom) }]}>
@@ -947,7 +948,7 @@ export default function BookScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.otpHelp}>Demo booking · Temporary ride OTP for starting this ride.</Text>
+            <Text style={styles.otpHelp}>Share your ride start code only when your driver arrives.</Text>
 
             <View style={styles.driverProfileRow}>
               <View style={styles.driverAvatar}>

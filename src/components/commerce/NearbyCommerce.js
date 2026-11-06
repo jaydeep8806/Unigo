@@ -28,6 +28,11 @@ import Inventory from "./Inventory";
 import Account from "./Account";
 import { Button, Field, Sheet, s } from "./UI";
 
+const DEMO_STORES = [
+  { id: "demo-grocery", name: "Everyday Supermarket", category: "Grocery" },
+  { id: "demo-produce", name: "Fresh Market", category: "Fruits & Vegetables" },
+  { id: "demo-home", name: "Home Essentials", category: "Household" },
+];
 const KEY = "@unigo_food_shop_addresses_v1";
 export default function NearbyCommerce() {
   const router = useRouter();
@@ -122,7 +127,7 @@ export default function NearbyCommerce() {
                   ),
               )
             : [];
-        setPlaces([...merchants, ...mapPlaces]);
+        setPlaces([...merchants, ...(type === "shops" ? DEMO_STORES.map((store) => ({ ...store, demo: true, latitude: address.latitude, longitude: address.longitude, distance: 0, status: "open", delivery_fee: 30, delivery_radius: 10 })) : []), ...mapPlaces]);
         if (registered.status === "rejected")
           setNotice(
             "Ordering is unavailable right now. Map listings below are for discovery only.",
@@ -247,7 +252,7 @@ export default function NearbyCommerce() {
           key={address ? `${address.latitude}-${address.longitude}` : "rajkot"}
           center={center}
           zoom={type === "shops" ? 12 : 14}
-          markers={visible.map((p) => ({
+          markers={visible.filter((p) => !p.demo).map((p) => ({
             id: p.id,
             lat: p.latitude,
             lng: p.longitude,
@@ -295,7 +300,7 @@ export default function NearbyCommerce() {
               </Text>
               <Text style={s.muted}>
                 {type === "shops"
-                  ? "Delivery partners first · Map discoveries across Rajkot"
+                  ? "Delivery partners and fictional shops · Map discoveries across Rajkot"
                   : "Delivery partners first · Map discoveries within 6 km"}
               </Text>
               <Field
@@ -367,11 +372,13 @@ export default function NearbyCommerce() {
                 <View style={{ flex: 1 }}>
                   <Text style={[s.title, { fontSize: 17 }]}>{item.name}</Text>
                   <Text style={s.muted}>
-                    {item.category} · {item.distance.toFixed(1)} km
+                    {item.category} · {item.demo ? "Fictional shop" : `${item.distance.toFixed(1)} km`}
                   </Text>
                 </View>
               </View>
-              {item.discovery ? (
+              {item.demo ? (
+                <Text style={s.muted}>Sample products and prices · No real delivery</Text>
+              ) : item.discovery ? (
                 <Text style={s.muted}>
                   Map listing · Delivery and ratings not verified
                 </Text>

@@ -108,6 +108,7 @@ test("PostgreSQL migration: checkout, rollback, idempotency, ownership and stale
         "utf8",
       ),
     );
+    await db.exec(await readFile(new URL('../supabase/migrations/202611060001_order_status_guard.sql', import.meta.url), 'utf8'));
     const owner = "11111111-1111-4111-8111-111111111111";
     const buyer = "22222222-2222-4222-8222-222222222222";
     const other = "33333333-3333-4333-8333-333333333333";
@@ -207,8 +208,8 @@ test("PostgreSQL migration: checkout, rollback, idempotency, ownership and stale
       /do not own/,
     );
     await assert.rejects(
-      () => db.query("select commerce_advance_order($1)", [first.id]),
-      /not owned/,
+      () => db.query("select commerce_advance_order($1,$2)", [first.id, 'placed']),
+      /unavailable/,
     );
     assert.equal(
       (
@@ -231,12 +232,15 @@ test("PostgreSQL migration: checkout, rollback, idempotency, ownership and stale
     );
     assert.equal(
       (
-        await db.query("select commerce_advance_order($1) as status", [
+        await db.query("select commerce_advance_order($1,$2) as status", [
           first.id,
+          'placed',
         ])
       ).rows[0].status,
       "accepted",
     );
+    await assert.rejects(() => db.query('select commerce_advance_order($1,$2)', [first.id, 'placed']), /changed/);
+    assert.equal((await db.query('select status from commerce_orders where id=$1', [first.id])).rows[0].status, 'accepted');
     assert.equal(
       (
         await db.query(

@@ -25,8 +25,9 @@ pin picker is the fallback for an unmapped street. Configure
 
 ## Enable ordering and inventory
 
-1. Apply `supabase/migrations/202610300001_food_shop.sql` to the existing Supabase
-   project using Supabase migrations or its SQL editor. No remote migration has
+1. Apply the SQL files in `supabase/migrations/` in filename order to the existing
+   Supabase project using Supabase migrations or its SQL editor. The order-status
+   guard requires the updated app; deploy both together. No remote migration has
    been applied by this change.
 2. Configure Supabase email/password authentication and confirmation emails.
    Food & Shop has its own account dialog; existing guest ride access is retained.
@@ -72,6 +73,8 @@ reference makes network retries idempotent. Revision checks prevent stale owner
 edits from overwriting stock changes. Orders progress from placed to accepted,
 preparing, out for delivery, and delivered. Cancellation/refunds and online
 payment integration are not part of this implementation.
+Status changes require the expected current status, so stale or repeated requests
+cannot accidentally skip a step.
 
 ## Validation
 

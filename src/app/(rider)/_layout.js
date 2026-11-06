@@ -1,8 +1,10 @@
 import React from 'react';
 import { Stack } from 'expo-router';
+import { FoodCartProvider } from '../../context/FoodCartProvider';
 
 export default function RiderLayout() {
   return (
+    <FoodCartProvider>
     <Stack
       screenOptions={{
         headerShown: false,
@@ -15,11 +17,13 @@ export default function RiderLayout() {
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
       <Stack.Screen name="donate" options={{ headerShown: false }} />
       <Stack.Screen name="nearby" options={{ headerShown: false }} />
+      <Stack.Screen name="shop-demo" options={{ headerShown: false }} />
       <Stack.Screen name="food" options={{ headerShown: false }} />
       <Stack.Screen name="restaurant" options={{ headerShown: false }} />
       <Stack.Screen name="cart" options={{ headerShown: false }} />
       <Stack.Screen name="box" options={{ headerShown: false }} />
       <Stack.Screen name="homespa" options={{ headerShown: false }} />
     </Stack>
+    </FoodCartProvider>
   );
 }

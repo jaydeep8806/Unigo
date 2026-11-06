@@ -26,7 +26,7 @@ export default function Welcome() {
     </View>
     <View style={styles.footer}>{!!error && <Text style={styles.error}>{error}</Text>}
       <TouchableOpacity style={styles.button} onPress={handleContinue} disabled={busy} accessibilityRole="button">{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue with UniGoMoto</Text>}</TouchableOpacity>
-      <Text style={styles.caption}>Continue in guest mode. Bookings and payments are simulated.</Text>
+      <Text style={styles.caption}>Continue as a guest. Sign in to access your account across devices.</Text>
     </View>
   </SafeAreaView>;
 }

@@ -20,6 +20,7 @@ import { useLocation } from '../../context/LocationProvider';
 import { THEME } from '../../constants/theme';
 import PressableScale from '../../components/PressableScale';
 import { RESTAURANTS, FOOD_CATEGORIES, CUISINE_BANNERS } from '../../data/restaurants';
+import { useFoodCart } from '../../context/FoodCartProvider';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -31,6 +32,7 @@ export default function FoodScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { selectedCity, coordinates } = useLocation();
+  const { totalItems } = useFoodCart();
 
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -250,6 +252,12 @@ export default function FoodScreen() {
             </View>
           </View>
 
+          {totalItems > 0 ? (
+            <PressableScale onPress={() => router.push('/(rider)/cart')} accessibilityRole="button" accessibilityLabel={`View cart, ${totalItems} items`} style={{ alignSelf: 'flex-end', padding: 10 }}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>View cart ({totalItems}) →</Text>
+            </PressableScale>
+          ) : null}
+
           {/* Search bar */}
           <View style={styles.searchRow}>
             <View style={styles.searchBar}>
@@ -330,6 +338,7 @@ export default function FoodScreen() {
     ),
     [
       insets.top,
+      totalItems,
       search,
       vegOnly,
       activeCategory,
