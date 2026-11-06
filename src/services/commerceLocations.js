@@ -4,21 +4,33 @@ export const RAJKOT = { lat: 22.3039, lng: 70.8022 };
 export const SERVICE_MESSAGE =
   "UniGoMoto Food & Shop is currently available in Rajkot.";
 export function distanceKm(a, b) {
+  if (!a || !b) return 0;
+  const aLat = Number(a.latitude ?? a.lat);
+  const aLon = Number(a.longitude ?? a.lng ?? a.lon);
+  const bLat = Number(b.latitude ?? b.lat);
+  const bLon = Number(b.longitude ?? b.lng ?? b.lon);
+
+  if (!Number.isFinite(aLat) || !Number.isFinite(aLon) || !Number.isFinite(bLat) || !Number.isFinite(bLon)) {
+    return 0;
+  }
+
   const rad = Math.PI / 180;
-  const dLat = (b.latitude - a.latitude) * rad;
-  const dLon = (b.longitude - a.longitude) * rad;
+  const dLat = (bLat - aLat) * rad;
+  const dLon = (bLon - aLon) * rad;
   const h =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(a.latitude * rad) *
-      Math.cos(b.latitude * rad) *
+    Math.cos(aLat * rad) *
+      Math.cos(bLat * rad) *
       Math.sin(dLon / 2) ** 2;
   return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 export function inRajkot(a) {
+  const lat = Number(a?.latitude ?? a?.lat);
+  const lon = Number(a?.longitude ?? a?.lng ?? a?.lon);
   return (
-    Number.isFinite(a?.latitude) &&
-    Number.isFinite(a?.longitude) &&
-    distanceKm({ latitude: RAJKOT.lat, longitude: RAJKOT.lng }, a) <= 25
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    distanceKm({ latitude: RAJKOT.lat, longitude: RAJKOT.lng }, { latitude: lat, longitude: lon }) <= 25
   );
 }
 const endpoint =

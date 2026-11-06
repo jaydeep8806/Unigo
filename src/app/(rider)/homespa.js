@@ -52,6 +52,7 @@ export default function HomeSpaScreen() {
 
   useEffect(() => {
     centerRef.current = initialCenter;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCenter(initialCenter);
   }, [initialCenter]);
   useEffect(() => () => { request.current += 1; }, []);

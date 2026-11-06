@@ -504,8 +504,16 @@ export default function BookScreen() {
         </TouchableOpacity>
       )}
       {!isPickerMode && !isEditingLocation && (
-        <TouchableOpacity style={[styles.recenterBtn, { top: undefined, bottom: Math.max(insets.bottom + 24, destination ? screenHeight * 0.57 : (rides.length > 0 ? 192 : 24)) }]} onPress={() => setFlyToCoords({ lat: origin.latitude, lng: origin.longitude, timestamp: Date.now() })} accessibilityLabel="Recenter on pickup">
-          <Ionicons name="locate" size={18} color={THEME.colors.primary} /><Text style={styles.recenterBtnText}>Pickup</Text>
+        <TouchableOpacity
+          style={[
+            styles.floatingRecenterBtn,
+            { bottom: Math.max(insets.bottom + 24, destination ? screenHeight * 0.57 : (rides.length > 0 ? 192 : 24)) },
+          ]}
+          onPress={() => setFlyToCoords({ lat: origin.latitude, lng: origin.longitude, timestamp: Date.now() })}
+          accessibilityLabel="Recenter on pickup"
+        >
+          <Ionicons name="locate" size={18} color={THEME.colors.primary} />
+          <Text style={styles.recenterBtnText}>Pickup</Text>
         </TouchableOpacity>
       )}
 
@@ -1243,6 +1251,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     top: 135,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    ...THEME.shadows.card,
+    zIndex: 20,
+  },
+  floatingRecenterBtn: {
+    position: 'absolute',
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: THEME.colors.white,
