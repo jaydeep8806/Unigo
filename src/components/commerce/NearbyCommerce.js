@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import LeafletMap from "../LeafletMap";
-import { supabase } from "../../services/supabase";
+import { supabase } from "../../lib/supabase";
 import {
   discoverPlaces,
   myOrders,
@@ -176,7 +176,7 @@ export default function NearbyCommerce() {
     setSelectedId(p.id);
     if (p.discovery)
       setNotice(
-        `${p.name}: mapped nearby, but not registered for UniGoMoto ordering. Opening hours: ${p.opening_hours || "not supplied"}.`,
+        `${p.name}: mapped nearby, but not registered for UniGo ordering. Opening hours: ${p.opening_hours || "not supplied"}.`,
       );
     else setStore(p);
   }, []);

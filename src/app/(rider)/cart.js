@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import * as Location from 'expo-location';
+import { reverseGeocode } from '../../services/geocoding';
 import PressableScale from '../../components/PressableScale';
 import { useFoodCart } from '../../context/FoodCartProvider';
 import { foodImage } from '../../data/foodImages';
@@ -17,6 +19,27 @@ export default function CartScreen() {
   const [step, setStep] = useState('cart');
   const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [paymentProvider, setPaymentProvider] = useState('');
+  const [locating, setLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState('');
+  const locateAddress = async () => {
+    setLocating(true);
+    setLocationMessage('');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') throw new Error('Location permission was denied. Enter your address manually.');
+      if (!(await Location.hasServicesEnabledAsync())) throw new Error('Turn on location services or enter your address manually.');
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const place = await reverseGeocode(position.coords.latitude, position.coords.longitude);
+      if (place.subtitle === 'Selected point') throw new Error('Could not find an address for your location. Enter it manually.');
+      setAddress([place.title, place.subtitle].filter(Boolean).join(', '));
+      setLocationMessage('Check the address and add your building, flat number and landmark.');
+    } catch (error) {
+      setLocationMessage(error.message || 'Could not get your location. Enter your address manually.');
+    } finally {
+      setLocating(false);
+    }
+  };
   const groups = useMemo(() => {
     const grouped = [];
     items.forEach((item) => {
@@ -77,16 +100,32 @@ export default function CartScreen() {
                 <View style={styles.card}>
                   <Text style={styles.sectionTitle}>Delivery address</Text>
                   <Text style={styles.muted}>Enter your full address, including building and street.</Text>
+                  <PressableScale style={styles.locationButton} onPress={locateAddress} disabled={locating} accessibilityRole="button" accessibilityLabel="Use current location" accessibilityState={{ disabled: locating }}>
+                    <Ionicons name="locate-outline" size={20} color={THEME.colors.primary} />
+                    <Text style={styles.outlineText}>{locating ? 'Finding your location…' : 'Use current location'}</Text>
+                  </PressableScale>
+                  {!!locationMessage && <Text style={styles.muted}>{locationMessage}</Text>}
                   <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="House, street, area and city" multiline accessibilityLabel="Delivery address" />
                 </View>
                 <View style={styles.card}>
                   <Text style={styles.sectionTitle}>Payment method</Text>
-                  {[['cod', 'Cash on delivery'], ['wallet', 'UniGo Wallet'], ['upi', 'UPI']].map(([key, label]) => (
-                    <PressableScale key={key} style={styles.paymentRow} onPress={() => setPaymentMethod(key)} accessibilityRole="radio" accessibilityState={{ checked: paymentMethod === key }}>
+                  {[['cod', 'Cash on delivery'], ['wallet', 'UniGo Wallet'], ['upi', 'UPI apps'], ['bank', 'Net banking']].map(([key, label]) => (
+                    <PressableScale key={key} style={styles.paymentRow} onPress={() => { setPaymentMethod(key); setPaymentProvider(''); }} accessibilityRole="radio" accessibilityState={{ checked: paymentMethod === key }}>
                       <Ionicons name={paymentMethod === key ? 'radio-button-on' : 'radio-button-off'} size={22} color={THEME.colors.primary} />
                       <Text style={styles.paymentLabel}>{label}</Text>
                     </PressableScale>
                   ))}
+                  {(paymentMethod === 'upi' || paymentMethod === 'bank') && (
+                    <View style={styles.providerList}>
+                      <Text style={styles.muted}>{paymentMethod === 'upi' ? 'Choose a UPI app' : 'Choose a bank'}</Text>
+                      {(paymentMethod === 'upi' ? ['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'Other UPI app'] : ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Bank of Baroda', 'Other bank']).map((provider) => (
+                        <PressableScale key={provider} style={styles.providerRow} onPress={() => setPaymentProvider(provider)} accessibilityRole="radio" accessibilityState={{ checked: paymentProvider === provider }}>
+                          <Ionicons name={paymentProvider === provider ? 'radio-button-on' : 'radio-button-off'} size={20} color={THEME.colors.primary} />
+                          <Text style={styles.paymentLabel}>{provider}</Text>
+                        </PressableScale>
+                      ))}
+                    </View>
+                  )}
                   <Text style={styles.notice}>Ordering and payments are not available yet. Your cart will remain here while you browse.</Text>
                 </View>
               </>
@@ -124,6 +163,9 @@ const styles = StyleSheet.create({
   outlineButton: { borderWidth: 1, borderColor: '#0F7A56', borderRadius: 12, padding: 14, alignItems: 'center' },
   outlineText: { color: '#0F7A56', fontWeight: '700' },
   input: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, padding: 12, minHeight: 70, color: '#0F172A', textAlignVertical: 'top' },
+  locationButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
+  providerList: { backgroundColor: '#F4F7F5', borderRadius: 10, padding: 12 },
+  providerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   paymentRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   paymentLabel: { color: '#0F172A', fontSize: 15, fontWeight: '600' },
   notice: { color: '#64748B', fontSize: 13, lineHeight: 19 },

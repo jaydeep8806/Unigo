@@ -1,5 +1,5 @@
 /**
- * Demo fare estimates for UniGoMoto.
+ * Demo fare estimates for UniGo.
  *
  * Formula:
  * Total Fare = Base Fare + (Distance beyond Base Km × Per Km Rate) + (Trip Duration × Per Minute Rate) + Platform Fee

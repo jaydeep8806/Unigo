@@ -59,11 +59,11 @@ export default function ActivitiesScreen() {
     }
     if (item.activityType === 'home_spa') {
       return <View style={styles.rideCard}>
-        <View style={styles.rideHeader}><View style={styles.vehiclePill}><Ionicons name="sparkles" size={15} color={THEME.colors.primary} /><Text style={styles.vehicleTitle}>Home & Spa · Demo</Text></View><View style={[styles.statusBadge, styles.statusConfirmed]}><Text style={styles.statusTextConfirmed}>Demo booked</Text></View></View>
+        <View style={styles.rideHeader}><View style={styles.vehiclePill}><Ionicons name="sparkles" size={15} color={THEME.colors.primary} /><Text style={styles.vehicleTitle}>Home & Spa</Text></View><View style={[styles.statusBadge, styles.statusConfirmed]}><Text style={styles.statusTextConfirmed}>Simulated booking</Text></View></View>
         <Text style={styles.locationTitle}>{item.service}</Text>
         <Text style={styles.locationSubtitle}>{item.provider} · {item.date} at {item.time}</Text>
         <Text style={styles.locationSubtitle}>Service location: {item.address}</Text>
-        <View style={styles.cardFooter}><View><Text style={styles.fareAmount}>{item.price != null ? `${CURRENCY_SYMBOL}${item.price}` : 'Charge unavailable'}</Text><Text style={styles.paymentMethod}>Demo charge · no payment taken</Text></View></View>
+        <View style={styles.cardFooter}><View><Text style={styles.fareAmount}>{item.price != null ? `${CURRENCY_SYMBOL}${item.price}` : 'Charge unavailable'}</Text><Text style={styles.paymentMethod}>Simulated charge · no payment taken</Text></View></View>
         <Text style={styles.locationSubtitle}>Simulation only. No provider was contacted.</Text>
       </View>;
     }

@@ -18,14 +18,14 @@ export default function Welcome() {
   return <SafeAreaView style={styles.screen}>
     <View style={styles.content}>
       <View style={styles.mark}><Ionicons name="navigate" size={42} color="#fff" /></View>
-      <Text style={styles.brand}>UniGoMoto</Text>
+      <Text style={styles.brand}>UniGo</Text>
       <Text style={styles.title}>Your city, within reach.</Text>
       <Text style={styles.description}>Choose your route, find the ride that fits, and get moving.</Text>
       <View style={styles.detail}><Ionicons name="location-outline" size={22} color="#0f7a56" /><Text style={styles.detailText}>Simple pickups and clear fares</Text></View>
       <View style={styles.detail}><Ionicons name="bicycle-outline" size={22} color="#0f7a56" /><Text style={styles.detailText}>Moto, auto and car options</Text></View>
     </View>
     <View style={styles.footer}>{!!error && <Text style={styles.error}>{error}</Text>}
-      <TouchableOpacity style={styles.button} onPress={handleContinue} disabled={busy} accessibilityRole="button">{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue with UniGoMoto</Text>}</TouchableOpacity>
+      <TouchableOpacity style={styles.button} onPress={handleContinue} disabled={busy} accessibilityRole="button">{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue with UniGo</Text>}</TouchableOpacity>
       <Text style={styles.caption}>Continue as a guest. Sign in to access your account across devices.</Text>
     </View>
   </SafeAreaView>;

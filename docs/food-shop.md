@@ -1,7 +1,7 @@
 # Food & Shop setup
 
 This feature is reached through the existing Food and Shops service tiles. The
-home page, UniGoMoto ride flow, global location selection and other services are
+home page, UniGo ride flow, global location selection and other services are
 unchanged. Both commerce sections share a separate delivery address.
 
 ## What works without merchant setup

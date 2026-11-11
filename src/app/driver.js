@@ -3,24 +3,31 @@ import {
   ActivityIndicator,
   AppState,
   Linking,
+  RefreshControl,
   ScrollView,
-  Switch,
+  TouchableOpacity,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useLocation } from "../context/LocationProvider";
 import {
   driverAction,
   driverHistory,
+  driverTodayHistory,
   driverProfile,
   registerDriver,
   watchRides,
 } from "../services/drivers";
 import { Button, Field, s } from "../components/DriverUI";
+import { distanceKm } from "../services/commerceLocations";
 import Account from "../components/commerce/Account";
+import LeafletMap from "../components/LeafletMap";
+
+const COMMISSION_RATE = 0.10;
 
 const stages = [
   "Personal details",
@@ -41,9 +48,14 @@ export default function Driver() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [rides, setRides] = useState([]);
+  const [todayRides, setTodayRides] = useState([]);
   const [step, setStep] = useState(0);
   const [otp, setOtp] = useState("");
   const [account, setAccount] = useState(false);
+  const [screen, setScreen] = useState("home");
+  const [selectedRide, setSelectedRide] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exampleState, setExampleState] = useState("available");
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -52,8 +64,10 @@ export default function Driver() {
     model: "",
     registration: "",
   });
-  const { requestLocation } = useLocation();
+  const { requestLocation, selectedCity, coordinates } = useLocation();
   const lock = useRef(false);
+  const goingOffline = useRef(false);
+  const heartbeatInFlight = useRef(null);
   const resumeRegistration = useRef(false);
   const active = rides.find((r) =>
     ["requested", "assigned", "arrived", "in_progress"].includes(r.status),
@@ -69,7 +83,9 @@ export default function Driver() {
         for (const row of rows.filter((r) => r.status === "requested"))
           await driverAction("sync", { id: row.id });
         rows = await driverHistory(p.id);
+        const today = await driverTodayHistory(p.id);
         setRides(rows);
+        setTodayRides(today);
       }
       setError("");
     } catch (e) {
@@ -96,7 +112,7 @@ export default function Driver() {
     let disposed = false;
     let sending = false;
     const heartbeat = async () => {
-      if (sending || AppState.currentState !== "active") return;
+      if (sending || goingOffline.current || AppState.currentState !== "active") return;
       sending = true;
       try {
         const permission = await Location.getForegroundPermissionsAsync();
@@ -105,12 +121,15 @@ export default function Driver() {
         const position = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
-        if (!disposed)
-          await driverAction("presence", {
+        if (!disposed && !goingOffline.current) {
+          const request = driverAction("presence", {
             online: true,
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
+          heartbeatInFlight.current = request;
+          try { await request; } finally { heartbeatInFlight.current = null; }
+        }
       } catch (e) {
         if (!disposed) setError(e.message);
       } finally {
@@ -146,6 +165,7 @@ export default function Driver() {
       const saved = existing || await registerDriver(form);
       setProfile(saved);
       setRides([]);
+      setTodayRides([]);
     } catch (e) {
       if (e.code === "AUTH_REQUIRED") {
         resumeRegistration.current = true;
@@ -159,6 +179,7 @@ export default function Driver() {
   }
   async function presence(online) {
     if (online) {
+      goingOffline.current = false;
       const permission = await requestLocation();
       if (!permission.granted || permission.permission !== "granted")
         throw new Error("Allow device location to receive nearby requests.");
@@ -170,7 +191,16 @@ export default function Driver() {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
       });
-    } else await driverAction("presence", { online: false });
+    } else {
+      goingOffline.current = true;
+      try {
+        if (heartbeatInFlight.current) await heartbeatInFlight.current.catch(() => {});
+        await driverAction("presence", { online: false });
+      } catch (e) {
+        goingOffline.current = false;
+        throw e;
+      }
+    }
   }
   function next() {
     if (
@@ -209,7 +239,32 @@ export default function Driver() {
       {...props}
     />
   );
+  const pickup = active?.details?.pickupCoords;
+  const drop = active?.details?.destinationCoords;
+  const mapPoint = coordinates || (profile?.latitude != null && profile?.longitude != null ? { latitude: profile.latitude, longitude: profile.longitude } : { latitude: selectedCity.lat, longitude: selectedCity.lng });
+  const mapMarkers = [
+    { lat: mapPoint.latitude, lng: mapPoint.longitude, label: "Your location", color: "#0f7a56" },
+    ...(pickup ? [{ lat: pickup.latitude, lng: pickup.longitude, label: "Pickup", color: "#2563eb" }] : []),
+    ...(drop ? [{ lat: drop.latitude, lng: drop.longitude, label: "Drop", color: "#dc2626" }] : []),
+  ];
+  const pickupDistance = profile?.latitude != null && profile?.longitude != null && pickup?.latitude != null && pickup?.longitude != null
+    ? distanceKm(profile, pickup) : null;
   const completed = rides.filter((r) => r.status === "completed");
+  const history = rides.filter((r) => ["completed", "cancelled"].includes(r.status));
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(); day.setHours(0, 0, 0, 0); day.setDate(day.getDate() - (6 - index));
+    const next = new Date(day); next.setDate(next.getDate() + 1);
+    const total = completed.filter((ride) => { const date = new Date(ride.updated_at); return date >= day && date < next; }).reduce((sum, ride) => sum + (Number(ride.details?.fare) || 0), 0);
+    return { label: day.toLocaleDateString(undefined, { weekday: "short" }), total };
+  });
+  const maxDayFare = Math.max(1, ...days.map((day) => day.total));
+  const todayFare = todayRides.reduce((sum, ride) => sum + (Number(ride.details?.fare) || 0), 0);
+  const todayDriverShare = todayRides.reduce((sum, ride) => {
+    const fare = Number(ride.details?.fare) || 0;
+    return sum + fare - Math.round(fare * COMMISSION_RATE * 100) / 100;
+  }, 0);
+  const quotedFare = Number(active?.details?.fare) || 0;
+  const commission = Math.round(quotedFare * COMMISSION_RATE * 100) / 100;
   return (
     <SafeAreaView style={s.screen}>
       {account && (
@@ -231,6 +286,7 @@ export default function Driver() {
       )}
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await refresh(); } finally { setRefreshing(false); } }} />}
         contentContainerStyle={s.content}
       >
         <View style={s.row}>
@@ -380,74 +436,72 @@ export default function Driver() {
           </>
         ) : (
           <>
-            <Text style={s.title}>Hello, {profile.name.split(" ")[0]}.</Text>
-            <Text style={s.text}>Your road. Your rhythm.</Text>
-            {profile.localPreview && <View style={s.card}><Text style={s.label}>Local preview</Text><Text style={s.text}>This profile is only in this screen. It is not saved to Supabase and cannot receive ride requests. Leaving or reloading this screen clears it.</Text></View>}
-            <View style={s.card}>
-              <View style={s.row}>
-                <View>
-                  <Text style={s.label}>
-                    {profile.online ? "Online" : "Offline"}
-                    {active
-                      ? " · On a ride"
-                      : profile.online
-                        ? " · Available"
-                        : ""}
-                  </Text>
-                  <Text style={s.text}>
-                    {profile.category.toUpperCase()} · {profile.registration}
-                  </Text>
-                </View>
-                <Switch
-                  accessibilityLabel="Driver online status"
-                  value={profile.online}
-                  disabled={busy || !!active || !!profile.localPreview}
-                  onValueChange={(value) => run(() => presence(value))}
-                />
-              </View>
-              <Text style={s.text}>
-                {profile.brand} {profile.model}
-              </Text>
-              <Text style={s.text}>
-                {profile.localPreview ? "Location sharing is unavailable in this preview." : profile.latitude != null
-                  ? `Location: ${profile.latitude.toFixed(4)}, ${profile.longitude.toFixed(4)}`
-                  : "Go online to share your current location."}
-              </Text>
-              <Text style={s.text}>
-                {profile.localPreview ? "The availability toggle is disabled in this preview." : "Keep this screen open while available. Location updates pause when the app is in the background."}
-              </Text>
+            <View accessibilityRole="tablist" style={{ flexDirection: "row", backgroundColor: "#fff", borderRadius: 18, padding: 5, gap: 2 }}>
+              {[["home", "home-outline", "Home"], ["earnings", "wallet-outline", "Earnings"], ["rides", "time-outline", "Rides"], ["profile", "person-outline", "Profile"]].map(([key, icon, title]) => (
+                <TouchableOpacity key={key} accessibilityRole="tab" accessibilityState={{ selected: screen === key }} onPress={() => setScreen(key)} style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: 10, borderRadius: 14, backgroundColor: screen === key ? "#e4f2e9" : "transparent" }}>
+                  <Ionicons name={icon} size={20} color={screen === key ? "#0f7a56" : "#74877d"} />
+                  <Text style={{ color: screen === key ? "#0f7a56" : "#74877d", fontSize: 11, fontWeight: "700" }}>{title}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
+            {screen === "home" && <View style={{ backgroundColor: profile.online ? "#0b7453" : "#143b2e", borderRadius: 26, padding: 22, gap: 16 }}>
+              <View style={s.row}>
+                <View style={{ flex: 1, gap: 5 }}>
+                  <Text style={{ color: "#b9dfcc", fontWeight: "800", fontSize: 11, letterSpacing: 1.3 }}>DRIVER DASHBOARD</Text>
+                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 25 }}>Hello, {profile.name.split(" ")[0]}</Text>
+                </View>
+                <View style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: "#ffffff25" }}><Ionicons name="person" size={24} color="#fff" /></View>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: profile.online ? "#a8ef86" : "#f5c776" }} />
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 17 }}>{active ? "On a ride" : profile.online ? "You are online" : "You are offline"}</Text>
+              </View>
+              <Text style={{ color: "#d6e9de", lineHeight: 21 }}>{profile.localPreview ? "Preview only. Ride requests are unavailable." : active ? "Finish your current ride before going offline." : profile.online ? "You can receive compatible nearby ride requests." : "Go online when you are ready to receive ride requests."}</Text>
+              <Button title={busy ? "Updating…" : profile.online ? "Go Offline" : "Go Online"} secondary disabled={busy || !!active || !!profile.localPreview} onPress={() => run(() => presence(!profile.online))} />
+            </View>}
+            {screen === "home" && <View style={{ height: 270, borderRadius: 22, overflow: "hidden", backgroundColor: "#e3eee8" }}><LeafletMap center={{ lat: mapPoint.latitude, lng: mapPoint.longitude }} markers={mapMarkers} route={active?.details?.routeCoords || []} /></View>}
+            {profile.localPreview && <View style={s.card}><Text style={s.label}>Local preview</Text><Text style={s.text}>This profile is not saved and cannot receive requests.</Text></View>}
+            {screen === "profile" && <>
+            <Text style={s.title}>Driver profile</Text>
+            <View style={s.card}><Text style={s.label}>{profile.name}</Text><Text style={s.text}>{profile.phone}</Text></View>
+            <View style={[s.card, { flexDirection: "row", alignItems: "center" }]}>
+              <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: "#e4f2e9", alignItems: "center", justifyContent: "center" }}><Ionicons name={profile.category === "bike" ? "bicycle-outline" : "car-outline"} size={25} color="#0f7a56" /></View>
+              <View style={{ flex: 1 }}><Text style={s.label}>{profile.brand} {profile.model}</Text><Text style={s.text}>{profile.category.toUpperCase()} · {profile.registration}</Text></View>
+            </View>
+            {!profile.localPreview && <Button secondary title="Location permission" onPress={() => run(requestLocation)} disabled={busy} />}
+            </>}
+            {screen === "home" && !profile.localPreview && <Text style={s.text}>Keep this screen open while online. Location updates pause when the app is in the background.</Text>}
             {active ? (
-              <View style={s.card}>
-                <Text style={s.eyebrow}>{labels[active.status]}</Text>
-                <Text style={s.label}>{active.details.origin}</Text>
-                <Text style={s.text}>↓</Text>
-                <Text style={s.label}>{active.details.destination}</Text>
-                <Text style={s.title}>₹{active.details.fare}</Text>
-                <Text style={s.text}>
-                  {active.details.paymentType} · {active.details.distanceKm} km
-                </Text>
+              <View style={[s.card, { borderWidth: 2, borderColor: "#35ad6b", gap: 15 }]}>
+                <View style={s.row}>
+                  <Text style={s.eyebrow}>{labels[active.status]}</Text>
+                  {active.status === "requested" && <Text style={{ color: "#0f7a56", fontWeight: "800", fontSize: 12 }}>1 REQUEST</Text>}
+                </View>
+                <View><Text style={{ color: "#63766c", fontSize: 12, fontWeight: "700" }}>RIDER&#39;S QUOTED FARE</Text><Text style={[s.title, { fontSize: 36 }]}>₹{active.details.fare}</Text></View>
+                <View style={{ backgroundColor: "#f2f8f4", padding: 14, borderRadius: 14, gap: 7 }}>
+                  <View style={s.row}><Text style={s.text}>UniGo commission (10%)</Text><Text style={s.label}>− ₹{commission.toFixed(2)}</Text></View>
+                  <View style={s.row}><Text style={s.label}>Estimated driver share</Text><Text style={s.label}>₹{(quotedFare - commission).toFixed(2)}</Text></View>
+                  <Text style={{ color: "#63766c", fontSize: 12, lineHeight: 18 }}>Estimate only. Payments and payouts are not connected.</Text>
+                </View>
+                <View style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
+                  <Ionicons name="radio-button-on" size={20} color="#0f7a56" />
+                  <View style={{ flex: 1, gap: 4 }}><Text style={s.label}>Pickup {pickupDistance == null ? "" : "· " + pickupDistance.toFixed(1) + " km away (straight line)"}</Text><Text style={s.text}>{active.details.origin}</Text></View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
+                  <Ionicons name="location" size={20} color="#db7048" />
+                  <View style={{ flex: 1, gap: 4 }}><Text style={s.label}>Drop · {active.details.distanceKm} km trip</Text><Text style={s.text}>{active.details.destination}</Text></View>
+                </View>
+                <Text style={s.text}>Payment: {active.details.paymentType}</Text>
                 {active.status === "requested" && (
                   <>
                     <Text style={s.text}>
                       Respond before{" "}
                       {new Date(active.expires_at).toLocaleTimeString()}.
                     </Text>
-                    <Button
-                      disabled={busy}
-                      title="Accept ride"
-                      onPress={() =>
-                        run(() => driverAction("accept", { id: active.id }))
-                      }
-                    />
-                    <Button
-                      disabled={busy}
-                      secondary
-                      title="Reject"
-                      onPress={() =>
-                        run(() => driverAction("reject", { id: active.id }))
-                      }
-                    />
+                    <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Reject ride" disabled={busy} onPress={() => run(() => driverAction("reject", { id: active.id }))} style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: "#bcc8c1", alignItems: "center", justifyContent: "center", opacity: busy ? 0.5 : 1 }}><Ionicons name="close" size={26} color="#283b32" /></TouchableOpacity>
+                      <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={() => run(() => driverAction("accept", { id: active.id }))} style={{ flex: 1, minHeight: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: "#ffcf28", opacity: busy ? 0.5 : 1 }}><Text style={{ color: "#19251e", fontWeight: "800", fontSize: 16 }}>Accept</Text></TouchableOpacity>
+                    </View>
                   </>
                 )}
                 {active.status === "assigned" && (
@@ -500,7 +554,7 @@ export default function Driver() {
                   />
                 )}
               </View>
-            ) : (
+            ) : screen === "home" ? (
               <View style={s.card}>
                 <Text style={s.label}>
                   {profile.localPreview ? "Preview your dashboard" : profile.online
@@ -513,41 +567,61 @@ export default function Driver() {
                     : "Go online to receive ride requests."}
                 </Text>
               </View>
-            )}
-            <View style={s.card}>
-              <Text style={s.eyebrow}>RECENT EARNINGS</Text>
-              <Text style={s.title}>
-                ₹
-                {completed
-                  .reduce((sum, r) => sum + Number(r.details.fare || 0), 0)
-                  .toFixed(2)}
-              </Text>
-              <Text style={s.text}>
-                Gross quoted fares from {completed.length} completed rides in
-                your latest 50 rides. Payment collection and payouts are not
-                connected.
-              </Text>
-            </View>
-            <Text style={s.label}>Completed rides</Text>
-            {!completed.length && (
-              <Text style={s.text}>Your completed trips will appear here.</Text>
-            )}
-            {completed.map((r) => (
-              <View key={r.id} style={s.card}>
-                <Text style={s.label}>
-                  {r.details.destination} · ₹{r.details.fare}
-                </Text>
-                <Text style={s.text}>
-                  {new Date(r.created_at).toLocaleString()} · {r.details.origin}
-                </Text>
+            ) : null}
+            {screen === "rides" && !active && exampleState !== "hidden" && <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 18, gap: 15, borderWidth: 3, borderColor: "#35ad6b" }}>
+              <View style={s.row}><Text style={{ color: "#24362d", fontWeight: "800", fontSize: 15 }}>Example request</Text><Text style={{ color: "#667d70", fontSize: 11 }}>No real ride</Text></View>
+              <Text style={{ color: "#15261d", fontSize: 34, fontWeight: "800" }}>₹240</Text>
+              <Text style={{ color: "#63766c", fontSize: 13 }}>10% commission ₹24 · Estimated driver share ₹216</Text>
+              <View style={{ flexDirection: "row", gap: 12 }}><Ionicons name="radio-button-on" size={20} color="#172b20" /><View style={{ flex: 1, gap: 4 }}><Text style={s.label}>0.8 km to pickup</Text><Text style={s.text}>Kalawad Road, Rajkot</Text></View></View>
+              <View style={{ flexDirection: "row", gap: 12 }}><Ionicons name="location" size={20} color="#172b20" /><View style={{ flex: 1, gap: 4 }}><Text style={s.label}>14 km trip</Text><Text style={s.text}>Race Course Road, Rajkot</Text></View></View>
+              {exampleState === "accepted" ? <Text style={s.text}>Example accepted. No rider was contacted and no ride was created.</Text> : <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss example request" onPress={() => setExampleState("hidden")} style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: "#bcc8c1", alignItems: "center", justifyContent: "center" }}><Ionicons name="close" size={26} color="#283b32" /></TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" onPress={() => setExampleState("accepted")} style={{ flex: 1, minHeight: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: "#ffcf28" }}><Text style={{ color: "#19251e", fontWeight: "800", fontSize: 16 }}>Accept example</Text></TouchableOpacity>
+              </View>}
+            </View>}
+            {(screen === "home" || screen === "earnings") && <>
+            {screen === "earnings" && <Text style={s.title}>Earnings</Text>}
+            <View style={[s.card, { padding: 20, gap: 16 }]}>
+              <View style={s.row}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={s.eyebrow}>TODAY&#39;S ACTIVITY</Text>
+                  <Text style={s.text}>Your completed rides today</Text>
+                </View>
+                <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: "#e4f2e9", alignItems: "center", justifyContent: "center" }}><Ionicons name="today-outline" size={21} color="#0f7a56" /></View>
               </View>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ flex: 1, backgroundColor: "#f2f8f4", borderRadius: 16, padding: 15, gap: 5 }}>
+                  <Text style={{ color: "#60796c", fontSize: 12, fontWeight: "700" }}>COMPLETED RIDES</Text>
+                  <Text style={{ color: "#123d2c", fontWeight: "800", fontSize: 27 }}>{todayRides.length}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: "#f2f8f4", borderRadius: 16, padding: 15, gap: 5 }}>
+                  <Text style={{ color: "#60796c", fontSize: 12, fontWeight: "700" }}>EST. DRIVER SHARE</Text>
+                  <Text style={{ color: "#123d2c", fontWeight: "800", fontSize: 27 }}>₹{todayDriverShare.toFixed(2)}</Text>
+                </View>
+              </View>
+              <Text style={{ color: "#63766c", fontSize: 12, lineHeight: 18 }}>Based on today’s completed rides and the current 10% commission rate. Quoted fares: ₹{todayFare.toFixed(2)}. Estimates only; payments and payouts are not connected.</Text>
+            </View>
+            {screen === "earnings" && <View style={s.card}>
+              <Text style={s.label}>Last 7 days</Text>
+              <Text style={s.text}>Gross quoted fares from your latest 50 rides</Text>
+              <View style={{ flexDirection: "row", alignItems: "flex-end", height: 125, gap: 5 }}>
+                {days.map((day, index) => <View key={index} style={{ flex: 1, alignItems: "center", gap: 4 }}><Text style={{ color: "#63766c", fontSize: 10 }}>₹{day.total.toFixed(0)}</Text><View style={{ width: "75%", height: Math.max(3, (day.total / maxDayFare) * 80), borderRadius: 5, backgroundColor: "#0f7a56" }} /><Text style={{ color: "#63766c", fontSize: 11 }}>{day.label}</Text></View>)}
+              </View>
+              <Text style={s.text}>Last 7 days: ₹{days.reduce((sum, day) => sum + day.total, 0).toFixed(2)} · Completed trips in latest 50: {completed.length}</Text>
+            </View>}
+            </>}
+            {screen === "rides" && <>
+            <Text style={s.title}>Ride history</Text>
+            <Text style={s.text}>Showing your latest 50 rides.</Text>
+            {!history.length && <Text style={s.text}>No trips yet.</Text>}
+            {history.map((r) => (
+              <TouchableOpacity key={r.id} accessibilityRole="button" onPress={() => setSelectedRide(selectedRide === r.id ? null : r.id)} style={s.card}>
+                <View style={s.row}><Text style={[s.label, { flex: 1 }]}>{r.details.destination}</Text><Text style={s.label}>₹{r.details.fare}</Text></View>
+                <Text style={s.text}>{r.status === "completed" ? "Completed" : "Cancelled"} · {new Date(r.created_at).toLocaleString()}</Text>
+                {selectedRide === r.id && <><Text style={s.text}>Pickup: {r.details.origin}</Text><Text style={s.text}>Drop: {r.details.destination}</Text><Text style={s.text}>Distance: {r.details.distanceKm} km · Payment: {r.details.paymentType}</Text></>}
+              </TouchableOpacity>
             ))}
-            {!profile.localPreview && <Button
-              secondary
-              title="Driver settings · Location permission"
-              onPress={() => run(requestLocation)}
-              disabled={busy}
-            />}
+            </>}
           </>
         )}
         {!!error && (

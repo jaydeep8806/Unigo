@@ -2,7 +2,7 @@
 // This is an explicit service zone, not a claim about municipal boundaries.
 export const RAJKOT = { lat: 22.3039, lng: 70.8022 };
 export const SERVICE_MESSAGE =
-  "UniGoMoto Food & Shop is currently available in Rajkot.";
+  "UniGo Food & Shop is currently available in Rajkot.";
 export function distanceKm(a, b) {
   if (!a || !b) return 0;
   const aLat = Number(a.latitude ?? a.lat);

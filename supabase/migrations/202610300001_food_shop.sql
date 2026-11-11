@@ -93,7 +93,7 @@ begin
  if jsonb_array_length(items) not between 1 and 100 then raise exception 'Cart must contain between 1 and 100 products'; end if;
  if jsonb_typeof(delivery_address) is distinct from 'object' or coalesce(length(trim(delivery_address->>'addressLine')), 0) = 0 then raise exception 'A complete delivery address is required'; end if;
  lat := (delivery_address->>'latitude')::double precision; lng := (delivery_address->>'longitude')::double precision;
- if lat is null or lng is null or not (lat between 22.07 and 22.54 and lng between 70.55 and 71.05) or public.commerce_distance(22.3039,70.8022,lat,lng) > 25 then raise exception 'UniGoMoto Food & Shop is currently available in Rajkot.'; end if;
+ if lat is null or lng is null or not (lat between 22.07 and 22.54 and lng between 70.55 and 71.05) or public.commerce_distance(22.3039,70.8022,lat,lng) > 25 then raise exception 'UniGo Food & Shop is currently available in Rajkot.'; end if;
  select * into merchant from public.commerce_shops where id = target_shop for share;
  if not found or merchant.status <> 'open' then raise exception 'This merchant is not accepting orders'; end if;
  if public.commerce_distance(lat,lng,merchant.latitude,merchant.longitude) > merchant.delivery_radius then raise exception 'This address is outside the merchant delivery radius'; end if;

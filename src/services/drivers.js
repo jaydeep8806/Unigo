@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase } from "../lib/supabase";
 
 export const simulationEnabled =
   typeof __DEV__ !== "undefined" &&
@@ -84,6 +84,19 @@ export async function driverHistory(id) {
     .eq("driver_id", id)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (error) throw error;
+  return data;
+}
+export async function driverTodayHistory(id) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const { data, error } = await supabase
+    .from("driver_rides")
+    .select("id, details, updated_at")
+    .eq("driver_id", id)
+    .eq("status", "completed")
+    .gte("updated_at", start.toISOString())
+    .order("updated_at", { ascending: false });
   if (error) throw error;
   return data;
 }

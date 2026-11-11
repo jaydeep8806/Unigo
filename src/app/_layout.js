@@ -37,7 +37,7 @@ function RootNavigationGate() {
   return (
     <View style={{ flex: 1 }}>
       <Slot />
-      {(isLoading || isSessionLoading || roleLoading || (!hasSession && segments[0] !== 'welcome') || (hasSession && !hasMadeDecision && segments[0] !== 'location-permission')) && (
+      {(isLoading || isSessionLoading || roleLoading || (!hasSession && segments[0] !== 'welcome') || (hasSession && !hasMadeDecision && segments[0] !== 'location-permission') || (hasSession && hasMadeDecision && !role && segments[0] !== 'role-selection')) && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={THEME.colors.primary} />
         </View>

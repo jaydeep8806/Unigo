@@ -104,7 +104,7 @@ export default function HomeSpaScreen() {
       const results = await findHomeSpaPlaces(current.lat, current.lng, service.id);
       if (id === request.current) setPlaces([...demos, ...results]);
     } catch {
-      if (id === request.current) setMessage('Live listings are unavailable. Demo providers are still available to try.');
+      if (id === request.current) setMessage('Live listings are unavailable. Fictional providers are still available to try.');
     } finally {
       if (id === request.current) setLoading(false);
     }
@@ -112,7 +112,7 @@ export default function HomeSpaScreen() {
   const callPlace = async (phone) => {
     try { await Linking.openURL(`tel:${phone.replace(/[^+\d]/g, '')}`); } catch { setMessage('Could not open the phone app on this device.'); }
   };
-  const markers = useMemo(() => places.map((place) => ({ ...place, label: `${place.name}${place.demo ? ' (Demo)' : ''}` })), [places]);
+  const markers = useMemo(() => places.map((place) => ({ ...place, label: `${place.name}${place.demo ? ' (Fictional)' : ''}` })), [places]);
   const dates = useMemo(() => Array.from({ length: 5 }, (_, index) => {
     const day = new Date();
     day.setDate(day.getDate() + index + 1);
@@ -128,7 +128,7 @@ export default function HomeSpaScreen() {
       setBookingOpen(false);
       router.replace('/(rider)/(tabs)/activities');
     } catch {
-      setBookingMessage('Could not save the demo booking. Please try again.');
+      setBookingMessage('Could not save the simulated booking. Please try again.');
     } finally { setSaving(false); }
   };
   const changeStep = (next) => {
@@ -176,20 +176,20 @@ export default function HomeSpaScreen() {
           <Text style={styles.subtle}>Select what you need, then choose a nearby business on the map or in the list.</Text>
           <View style={styles.options}>{service.options.map((option) => <TouchableOpacity key={option} accessibilityRole="button" accessibilityState={{ selected: selectedOption === option }} style={[styles.option, selectedOption === option && styles.optionSelected]} onPress={() => setSelectedOption(option)}><Text style={[styles.optionText, selectedOption === option && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
           <View style={styles.resultsMap}><LeafletMap center={center} zoom={12} markers={markers} onMarkerPress={(marker) => setSelectedPlace(marker)} /></View>
-          <Text style={styles.notice}>Demo providers and their map locations are fictional. Demo bookings are saved on this device and do not contact a provider. Live listings require direct confirmation.</Text>
+          <Text style={styles.notice}>Example providers and their map locations are fictional. Simulated bookings are saved on this device and do not contact a provider. Live listings require direct confirmation.</Text>
           {bookingMessage ? <Text style={styles.notice}>{bookingMessage}</Text> : null}
           {selectedPlace ? <View style={styles.selectedCard}>
-            <Text style={styles.cardTitle}>{selectedPlace.name}{selectedPlace.demo ? ' · Demo' : ''}</Text>
+            <Text style={styles.cardTitle}>{selectedPlace.name}{selectedPlace.demo ? ' · Fictional' : ''}</Text>
             <Text style={styles.subtle}>{selectedPlace.type.replace(/_/g, ' ')} · {selectedOption || service.label}</Text>
             <Text style={styles.subtle}>Service location: {address}</Text>
-            {selectedPlace.demo ? <TouchableOpacity style={styles.button} onPress={() => { setBookingDate(''); setBookingTime(''); setBookingMessage(''); setBookingOpen(true); }} accessibilityRole="button"><Text style={styles.buttonText}>Book demo service</Text></TouchableOpacity> : selectedPlace.phone ? <TouchableOpacity style={styles.button} onPress={() => callPlace(selectedPlace.phone)} accessibilityRole="button"><Text style={styles.buttonText}>Call to arrange booking</Text></TouchableOpacity> : <Text style={styles.empty}>No phone number is available for this listing, so a booking cannot be arranged here.</Text>}
+            {selectedPlace.demo ? <TouchableOpacity style={styles.button} onPress={() => { setBookingDate(''); setBookingTime(''); setBookingMessage(''); setBookingOpen(true); }} accessibilityRole="button"><Text style={styles.buttonText}>Try simulated booking</Text></TouchableOpacity> : selectedPlace.phone ? <TouchableOpacity style={styles.button} onPress={() => callPlace(selectedPlace.phone)} accessibilityRole="button"><Text style={styles.buttonText}>Call to arrange booking</Text></TouchableOpacity> : <Text style={styles.empty}>No phone number is available for this listing, so a booking cannot be arranged here.</Text>}
           </View> : null}
           <Text style={styles.cardTitle}>Nearby businesses</Text>
           {loading ? <View style={styles.loadingRow}><ActivityIndicator color={THEME.colors.primary} /><Text style={styles.subtle}> Looking for live businesses…</Text></View> : null}
           {places.length ? places.map((place) => (
             <View key={place.id} style={styles.card}>
               <View style={styles.icon}><Ionicons name="business-outline" size={22} color={THEME.colors.primaryDark} /></View>
-              <View style={styles.grow}><Text style={styles.cardTitle}>{place.name}{place.demo ? ' · Demo' : ''}</Text><Text style={styles.subtle}>{place.type.replace(/_/g, ' ')}</Text>{place.phone ? <Text style={styles.subtle}>{place.phone}</Text> : null}</View>
+              <View style={styles.grow}><Text style={styles.cardTitle}>{place.name}{place.demo ? ' · Fictional' : ''}</Text><Text style={styles.subtle}>{place.type.replace(/_/g, ' ')}</Text>{place.phone ? <Text style={styles.subtle}>{place.phone}</Text> : null}</View>
               <TouchableOpacity onPress={() => setSelectedPlace(place)} accessibilityRole="button" accessibilityLabel={`Select ${place.name}`}><Text style={styles.secondaryText}>Select</Text></TouchableOpacity>
             </View>
           )) : <Text style={styles.empty}>{message || 'No named listings found. Try another location or service, or check your connection.'}</Text>}
@@ -202,9 +202,9 @@ export default function HomeSpaScreen() {
       <Modal visible={bookingOpen} animationType="slide" onRequestClose={() => setBookingOpen(false)}>
         <SafeAreaView style={styles.screen} edges={['top', 'bottom']}><ScrollView contentContainerStyle={styles.content}>
           <TouchableOpacity onPress={() => setBookingOpen(false)} accessibilityRole="button"><Text style={styles.secondaryText}>← Back</Text></TouchableOpacity>
-          <Text style={styles.heading}>Book a demo service</Text>
+          <Text style={styles.heading}>Try a simulated booking</Text>
           <Text style={styles.notice}>This is a simulation. No appointment is sent to a provider and no payment is taken.</Text>
-          <Text style={styles.cardTitle}>{selectedPlace?.name} · Demo</Text>
+          <Text style={styles.cardTitle}>{selectedPlace?.name} · Fictional</Text>
           <Text style={styles.subtle}>Service location: {address}</Text>
           <Text style={styles.cardTitle}>Choose a service</Text>
           <View style={styles.options}>{service?.options.map((option) => <TouchableOpacity key={option} onPress={() => setSelectedOption(option)} style={[styles.option, selectedOption === option && styles.optionSelected]}><Text style={[styles.optionText, selectedOption === option && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
@@ -212,8 +212,8 @@ export default function HomeSpaScreen() {
           <View style={styles.options}>{dates.map((date) => <TouchableOpacity key={date} onPress={() => setBookingDate(date)} style={[styles.option, bookingDate === date && styles.optionSelected]}><Text style={[styles.optionText, bookingDate === date && styles.optionTextSelected]}>{date}</Text></TouchableOpacity>)}</View>
           <Text style={styles.cardTitle}>Choose a time</Text>
           <View style={styles.options}>{['9:00 AM', '11:00 AM', '2:00 PM', '4:00 PM'].map((time) => <TouchableOpacity key={time} onPress={() => setBookingTime(time)} style={[styles.option, bookingTime === time && styles.optionSelected]}><Text style={[styles.optionText, bookingTime === time && styles.optionTextSelected]}>{time}</Text></TouchableOpacity>)}</View>
-          {selectedOption ? <Text style={styles.notice}>Demo service charge: ₹{DEMO_PRICES[selectedOption]} · No payment will be collected.</Text> : null}
-          <TouchableOpacity disabled={!selectedOption || !bookingDate || !bookingTime || saving} style={[styles.button, (!selectedOption || !bookingDate || !bookingTime || saving) && styles.disabled]} onPress={saveDemoBooking}><Text style={styles.buttonText}>{saving ? 'Saving…' : 'Confirm demo booking'}</Text></TouchableOpacity>
+          {selectedOption ? <Text style={styles.notice}>Simulated service charge: ₹{DEMO_PRICES[selectedOption]} · No payment will be collected.</Text> : null}
+          <TouchableOpacity disabled={!selectedOption || !bookingDate || !bookingTime || saving} style={[styles.button, (!selectedOption || !bookingDate || !bookingTime || saving) && styles.disabled]} onPress={saveDemoBooking}><Text style={styles.buttonText}>{saving ? 'Saving…' : 'Confirm simulated booking'}</Text></TouchableOpacity>
           {bookingMessage ? <Text style={styles.empty}>{bookingMessage}</Text> : null}
         </ScrollView></SafeAreaView>
       </Modal>

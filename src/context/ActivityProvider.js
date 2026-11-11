@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { asActivity, driverAction, simulationEnabled, watchRides } from '../services/drivers';
-import { supabase } from '../services/supabase';
+import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY_RIDES = '@unigo_user_rides';
 

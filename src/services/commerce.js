@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase } from "../lib/supabase";
 import { distanceKm, RAJKOT } from "./commerceLocations";
 import { shopCategory } from "./commerceRules";
 export { stockState, deliverable } from "./commerceRules";

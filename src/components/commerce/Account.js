@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Text, ScrollView } from "react-native";
-import { supabase } from "../../services/supabase";
+import { supabase } from "../../lib/supabase";
 import { accountErrorMessage } from "../../services/authErrors";
 import { Sheet, Field, Button, s } from "./UI";
 

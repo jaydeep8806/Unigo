@@ -10,7 +10,7 @@ import {
   SHOP_CATEGORIES,
   stockState,
 } from "../../services/commerce";
-import { supabase } from "../../services/supabase";
+import { supabase } from "../../lib/supabase";
 import { Button, Field, Sheet, s } from "./UI";
 
 const blank = {
