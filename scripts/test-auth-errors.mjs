@@ -9,4 +9,7 @@ test('Account errors distinguish transport failures from authentication errors',
   assert.equal(accountErrorMessage({ message: 'Invalid login credentials' }), 'Invalid login credentials');
   assert.equal(accountErrorMessage({ message: 'Email rate limit exceeded' }), 'Email rate limit exceeded');
   assert.match(accountErrorMessage(null), /Please try again/);
+  assert.match(accountErrorMessage({ code: 'email_address_not_authorized' }), /configure email delivery/);
+  assert.match(accountErrorMessage({ code: 'over_email_send_rate_limit' }), /wait/);
+  assert.match(accountErrorMessage({ code: 'email_not_confirmed' }), /Confirm your email/);
 });

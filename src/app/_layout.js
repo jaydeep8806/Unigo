@@ -12,32 +12,34 @@ import { RoleProvider, useRole } from '../context/RoleProvider';
 
 function RootNavigationGate() {
   const { isLoading, hasMadeDecision } = useLocation();
-  const { isSessionLoading, hasSession } = useSession();
+  const { isSessionLoading, user } = useSession();
   const { role, loading: roleLoading } = useRole();
   const router = useRouter();
   const segments = useSegments();
+  const inAuth = segments[0] === 'login' || segments[0] === 'signup';
+  const inPublic = inAuth || segments[0] === 'welcome';
 
   useEffect(() => {
     if (isLoading || isSessionLoading || roleLoading) return;
+    if (inAuth && !user) return;
 
     const inLocationPermissionScreen = segments[0] === 'location-permission';
-    const inWelcome = segments[0] === 'welcome';
 
-    if (!hasSession && !inWelcome) {
+    if (!user && !inPublic) {
       router.replace('/welcome');
-    } else if (hasSession && !hasMadeDecision && !inLocationPermissionScreen) {
-      router.replace('/location-permission');
-    } else if (hasSession && hasMadeDecision && !role && segments[0] !== 'role-selection') {
+    } else if (user && !role && segments[0] !== 'role-selection') {
       router.replace('/role-selection');
-    } else if (hasSession && hasMadeDecision && role && (inLocationPermissionScreen || inWelcome || (role === 'driver' && segments[0] === '(rider)') || (role === 'user' && segments[0] === 'driver'))) {
+    } else if (user && role && !hasMadeDecision && !inLocationPermissionScreen) {
+      router.replace('/location-permission');
+    } else if (user && hasMadeDecision && role && (inLocationPermissionScreen || inPublic || (role === 'driver' && segments[0] === '(rider)') || (role === 'user' && segments[0] === 'driver'))) {
       router.replace(role === 'driver' ? '/driver' : '/(rider)/(tabs)');
     }
-  }, [isLoading, isSessionLoading, hasSession, hasMadeDecision, role, roleLoading, segments, router]);
+  }, [isLoading, isSessionLoading, hasMadeDecision, role, roleLoading, segments, router, inAuth, inPublic, user]);
 
   return (
     <View style={{ flex: 1 }}>
       <Slot />
-      {(isLoading || isSessionLoading || roleLoading || (!hasSession && segments[0] !== 'welcome') || (hasSession && !hasMadeDecision && segments[0] !== 'location-permission') || (hasSession && hasMadeDecision && !role && segments[0] !== 'role-selection')) && (
+      {(isLoading || isSessionLoading || roleLoading || (!user && !inPublic) || (user && ((!role && segments[0] !== 'role-selection') || (role && !hasMadeDecision && segments[0] !== 'location-permission')))) && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={THEME.colors.primary} />
         </View>

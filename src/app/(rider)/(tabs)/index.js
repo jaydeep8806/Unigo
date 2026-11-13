@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,8 @@ import {
   FlatList,
   Pressable,
   Dimensions,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +22,7 @@ import { CITIES, CURRENCY_SYMBOL } from '../../../constants/config';
 import { THEME } from '../../../constants/theme';
 import PressableScale from '../../../components/PressableScale';
 import Toast from '../../../components/Toast';
+import { searchRajkot } from '../../../services/commerceLocations';
 
 // ── Service tile images ──────────────────────────────────────────────
 const RIDES_IMG = require('../../../../assets/images/services/rides.png');
@@ -50,12 +53,34 @@ const INFO_CARD_W = SCREEN_WIDTH * 0.42;
 export default function RiderHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { selectedCity, setCity } = useLocation();
+  const { selectedCity, setCity, selectManualLocation } = useLocation();
   const { balance } = useWallet();
 
   const [cityModalVisible, setCityModalVisible] = useState(false);
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationResults, setLocationResults] = useState([]);
+  const [locationSearching, setLocationSearching] = useState(false);
+  const [locationSearchError, setLocationSearchError] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
+  useEffect(() => {
+    const query = locationQuery.trim();
+    if (!cityModalVisible || query.length < 2) return undefined;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLocationSearching(true);
+      try {
+        const places = await searchRajkot(query, controller.signal);
+        if (!controller.signal.aborted) setLocationResults(places);
+      } catch {
+        if (!controller.signal.aborted) setLocationSearchError('Location search is unavailable. Please try again.');
+      } finally {
+        if (!controller.signal.aborted) setLocationSearching(false);
+      }
+    }, 500);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [cityModalVisible, locationQuery]);
 
   const showToast = (message = 'Coming soon') => {
     setToastMessage(message);
@@ -454,8 +479,8 @@ export default function RiderHomeScreen() {
 
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Choose City</Text>
-                <Text style={styles.modalSubtitle}>Select your current city in India</Text>
+                <Text style={styles.modalTitle}>Choose location</Text>
+                <Text style={styles.modalSubtitle}>Search Rajkot areas, roads and landmarks</Text>
               </View>
               <PressableScale
                 onPress={() => setCityModalVisible(false)}
@@ -465,19 +490,40 @@ export default function RiderHomeScreen() {
               </PressableScale>
             </View>
 
+            <View style={styles.locationSearch}>
+              <Ionicons name="search-outline" size={20} color={THEME.colors.mutedText} />
+              <TextInput
+                value={locationQuery}
+                onChangeText={(value) => { setLocationQuery(value); setLocationResults([]); setLocationSearchError(''); setLocationSearching(false); }}
+                placeholder="Search Rajkot locations"
+                placeholderTextColor={THEME.colors.mutedText}
+                style={styles.locationSearchInput}
+                accessibilityLabel="Search Rajkot locations"
+                autoCorrect={false}
+              />
+              {locationSearching && <ActivityIndicator size="small" color={THEME.colors.primary} />}
+            </View>
             <FlatList
-              data={CITIES}
-              keyExtractor={(item) => item.name}
+              data={locationQuery.trim().length >= 2 ? locationResults : CITIES}
+              keyExtractor={(item, index) => item.name || `${item.latitude}-${item.longitude}-${index}`}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.cityListContent}
+              ListHeaderComponent={<Text style={styles.locationListLabel}>{locationQuery.trim().length >= 2 ? 'RAJKOT SEARCH RESULTS' : 'CITIES · SEARCH ABOVE FOR RAJKOT LOCATIONS'}</Text>}
+              ListEmptyComponent={locationQuery.trim().length >= 2 && !locationSearching ? <Text style={styles.locationEmpty}>{locationSearchError || 'No places found. Try another area, road or landmark.'}</Text> : null}
               renderItem={({ item }) => {
-                const isSelected = selectedCity?.name === item.name;
+                const isPlace = item.latitude != null;
+                const name = isPlace ? item.area : item.name;
+                const isSelected = selectedCity?.name === name;
                 return (
                   <PressableScale
                     style={[styles.cityRow, isSelected && styles.cityRowSelected]}
                     onPress={async () => {
-                      await setCity(item);
+                      if (isPlace) await selectManualLocation({ title: name, subtitle: item.addressLine, latitude: item.latitude, longitude: item.longitude });
+                      else await setCity(item);
                       setCityModalVisible(false);
-                      showToast(`City switched to ${item.name}`);
+                      setLocationQuery('');
+                      setLocationResults([]);
+                      showToast(`Location set to ${name}`);
                     }}
                   >
                     <View
@@ -487,7 +533,7 @@ export default function RiderHomeScreen() {
                       ]}
                     >
                       <Ionicons
-                        name="business-outline"
+                        name={isPlace ? 'location-outline' : 'business-outline'}
                         size={20}
                         color={isSelected ? THEME.colors.primary : THEME.colors.mutedText}
                       />
@@ -500,9 +546,9 @@ export default function RiderHomeScreen() {
                           isSelected && styles.cityNameSelected,
                         ]}
                       >
-                        {item.name}
+                        {name}
                       </Text>
-                      <Text style={styles.cityStateText}>{item.state}</Text>
+                      <Text style={styles.cityStateText} numberOfLines={2}>{isPlace ? item.addressLine : item.state}</Text>
                     </View>
 
                     {isSelected ? (
@@ -1011,6 +1057,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  locationSearch: { marginHorizontal: 20, marginTop: 14, paddingHorizontal: 12, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f2f6f4', borderRadius: 12 },
+  locationSearchInput: { flex: 1, color: THEME.colors.text, fontSize: 14, paddingVertical: 10 },
+  locationListLabel: { color: THEME.colors.mutedText, fontSize: 10, fontWeight: '700', marginHorizontal: 12, marginBottom: 6 },
+  locationEmpty: { color: THEME.colors.mutedText, fontSize: 13, lineHeight: 19, padding: 12 },
   cityListContent: {
     paddingHorizontal: 16,
     paddingTop: 10,

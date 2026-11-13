@@ -1,3 +1,6 @@
+import { Platform } from 'react-native';
+import * as Location from 'expo-location';
+
 // Photon supports search-as-you-type and uses OpenStreetMap data.
 // The public instance is suitable for light development use; configure a hosted
 // instance for a production app with more traffic.
@@ -52,4 +55,25 @@ export async function reverseGeocode(latitude, longitude) {
   } catch {
     return fallback;
   }
+}
+
+// On-demand fallback: native geocoding is not an autocomplete API.
+export async function searchOnDevice(query, city) {
+  if (Platform.OS === 'web') throw new Error('Device search is only available on a phone.');
+  const permission = Platform.OS === 'android' ? await Location.requestForegroundPermissionsAsync() : null;
+  if (Platform.OS === 'android' && permission.status !== 'granted') throw new Error('Allow location permission to use device search.');
+  const text = query.trim();
+  if (text.length < 2) return [];
+  const address = city && !text.toLowerCase().includes(city.toLowerCase()) ? text + ', ' + city : text;
+  const points = await Location.geocodeAsync(address);
+  const places = await Promise.all(points.slice(0, 5).map(async (point, index) => {
+    if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude) || point.latitude < 6 || point.latitude > 38.5 || point.longitude < 68 || point.longitude > 98) return null;
+    let label = '';
+    try {
+      const [result] = await Location.reverseGeocodeAsync(point);
+      label = [...new Set([result?.name, result?.street, result?.district, result?.city, result?.region].filter(Boolean))].join(', ');
+    } catch { /* The coordinates can still be displayed for confirmation. */ }
+    return { id: 'device-' + index + '-' + point.latitude + '-' + point.longitude, title: text, subtitle: label || 'Device search result · check the pin', latitude: point.latitude, longitude: point.longitude };
+  }));
+  return places.filter(Boolean);
 }

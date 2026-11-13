@@ -1,429 +1,123 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  StyleSheet,
-  Text,
-  View,
-  FlatList,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { THEME } from '../../../constants/theme';
-import { CURRENCY_SYMBOL } from '../../../constants/config';
-import { useActivity } from '../../../context/ActivityProvider';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useActivity } from '../../../context/ActivityProvider';
+import { loadDemo, money } from '../../../services/shopDemo';
+
+const FILTERS = ['All', 'Rides', 'Shop', 'Home & Spa'];
+const RIDE_STATUS = { searching: 'Finding driver', requested: 'Awaiting driver', unavailable: 'No driver available', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' };
+const SHOP_STATUS = { PLACED: 'Order placed', ACCEPTED: 'Accepted', PACKING: 'Packing', READY_FOR_PICKUP: 'Ready for pickup', DRIVER_ASSIGNED: 'Driver assigned', PICKED_UP: 'Picked up', OUT_FOR_DELIVERY: 'Out for delivery', DELIVERED: 'Delivered', CANCELED: 'Cancelled', FAILED: 'Failed' };
+
+function dateLabel(value) {
+  const date = new Date(value);
+  return value && !Number.isNaN(date.getTime()) ? date.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Date unavailable';
+}
 
 export default function ActivitiesScreen() {
-  const { rides, cancelRide, clearRides } = useActivity();
+  const { rides, isLoaded } = useActivity();
   const router = useRouter();
-  const [serviceBookings, setServiceBookings] = useState([]);
-  const [shopOrders, setShopOrders] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [filter, setFilter] = useState('All');
+  const [expanded, setExpanded] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+
   useFocusEffect(useCallback(() => {
     let active = true;
-    AsyncStorage.getItem('@unigo_home_spa_demo_bookings').then((stored) => {
-      if (active) setServiceBookings(stored ? JSON.parse(stored) : []);
-    }).catch(() => { if (active) setServiceBookings([]); });
-    AsyncStorage.getItem('@unigo_shop_demo_orders').then((stored) => {
-      if (active) setShopOrders(stored ? JSON.parse(stored) : []);
-    }).catch(() => { if (active) setShopOrders([]); });
+    Promise.allSettled([AsyncStorage.getItem('@unigo_home_spa_demo_bookings'), loadDemo()]).then(([bookingResult, orderResult]) => {
+      if (!active) return;
+      let failed = false;
+      try {
+        if (bookingResult.status === 'rejected') throw bookingResult.reason;
+        const parsed = bookingResult.value ? JSON.parse(bookingResult.value) : [];
+        if (!Array.isArray(parsed)) throw new Error('Invalid bookings');
+        setBookings(parsed);
+      } catch { failed = true; }
+      if (orderResult.status === 'fulfilled' && Array.isArray(orderResult.value.orders)) setOrders(orderResult.value.orders);
+      else failed = true;
+      setLoadError(failed);
+    });
     return () => { active = false; };
   }, []));
 
-  const handleCancel = (rideId) => {
-    Alert.alert(
-      'Cancel Ride',
-      'Are you sure you want to cancel this booking?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: () => cancelRide(rideId).catch(e => Alert.alert('Could not cancel ride', e.message)),
-        },
-      ]
-    );
-  };
+  const activities = useMemo(() => [
+    ...rides.map(item => ({ ...item, type: 'Rides' })),
+    ...orders.map(item => ({ ...item, type: 'Shop' })),
+    ...bookings.map(item => ({ ...item, type: 'Home & Spa' })),
+  ].sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)), [rides, orders, bookings]);
+  const visible = filter === 'All' ? activities : activities.filter(item => item.type === filter);
 
-  const renderRideItem = ({ item }) => {
-    if (item.activityType === 'shop_demo') {
-      return <View style={styles.rideCard}>
-        <View style={styles.rideHeader}><View style={styles.vehiclePill}><Ionicons name="basket" size={15} color={THEME.colors.primary} /><Text style={styles.vehicleTitle}>Shop · Simulation</Text></View><View style={[styles.statusBadge, styles.statusConfirmed]}><Text style={styles.statusTextConfirmed}>Simulated order</Text></View></View>
-        <Text style={styles.locationTitle}>{item.store}</Text>
-        <Text style={styles.locationSubtitle}>{item.items.map((line) => `${line.quantity} × ${line.name}`).join(', ')}</Text>
-        <Text style={styles.locationSubtitle}>Delivery address: {item.address}</Text>
-        <View style={styles.cardFooter}><View><Text style={styles.fareAmount}>{CURRENCY_SYMBOL}{item.total}</Text><Text style={styles.paymentMethod}>Simulated total · no payment taken</Text></View></View>
-        <Text style={styles.locationSubtitle}>Simulation only. No shop was contacted or delivery arranged.</Text>
-      </View>;
-    }
-    if (item.activityType === 'home_spa') {
-      return <View style={styles.rideCard}>
-        <View style={styles.rideHeader}><View style={styles.vehiclePill}><Ionicons name="sparkles" size={15} color={THEME.colors.primary} /><Text style={styles.vehicleTitle}>Home & Spa</Text></View><View style={[styles.statusBadge, styles.statusConfirmed]}><Text style={styles.statusTextConfirmed}>Simulated booking</Text></View></View>
-        <Text style={styles.locationTitle}>{item.service}</Text>
-        <Text style={styles.locationSubtitle}>{item.provider} · {item.date} at {item.time}</Text>
-        <Text style={styles.locationSubtitle}>Service location: {item.address}</Text>
-        <View style={styles.cardFooter}><View><Text style={styles.fareAmount}>{item.price != null ? `${CURRENCY_SYMBOL}${item.price}` : 'Charge unavailable'}</Text><Text style={styles.paymentMethod}>Simulated charge · no payment taken</Text></View></View>
-        <Text style={styles.locationSubtitle}>Simulation only. No provider was contacted.</Text>
-      </View>;
-    }
-    const isCancelled = item.status === 'cancelled';
-    const isConfirmed = ['confirmed', 'searching', 'requested', 'assigned', 'arrived', 'in_progress'].includes(item.status);
-    const statusLabel = { searching: 'Finding driver', requested: 'Awaiting acceptance', unavailable: 'No drivers available', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' }[item.status] || item.status;
-
-    return (
-      <TouchableOpacity style={styles.rideCard} onPress={() => router.push({ pathname: '/(rider)/trip', params: { id: item.id } })} activeOpacity={0.85}>
-        {/* Card Header */}
-        <View style={styles.rideHeader}>
-          <View style={styles.vehiclePill}>
-            <Ionicons
-              name={item.isCarpool ? 'people' : 'car'}
-              size={15}
-              color={THEME.colors.primary}
-            />
-            <Text style={styles.vehicleTitle}>
-              {item.vehicleName || 'UniGo Ride'}
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.statusBadge,
-              isConfirmed && styles.statusConfirmed,
-              isCancelled && styles.statusCancelled,
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                isConfirmed && styles.statusTextConfirmed,
-                isCancelled && styles.statusTextCancelled,
-              ]}
-            >
-              {statusLabel}
-            </Text>
-          </View>
-        </View>
-
-        {/* Route Details */}
-        <View style={styles.routeContainer}>
-          <View style={styles.timelineIndicators}>
-            <View style={styles.dotGreen} />
-            <View style={styles.timelineDashed} />
-            <View style={styles.dotRed} />
-          </View>
-
-          <View style={styles.locationsCol}>
-            <Text style={styles.locationTitle} numberOfLines={1}>
-              {item.origin || 'Current Location'}
-            </Text>
-            <Text style={styles.locationSubtitle}>Pickup</Text>
-
-            <View style={{ height: 14 }} />
-
-            <Text style={styles.locationTitle} numberOfLines={1}>
-              {item.destination || 'Destination'}
-            </Text>
-            <Text style={styles.locationSubtitle}>Drop-off</Text>
-          </View>
-        </View>
-
-        {/* Driver & OTP Details if Confirmed */}
-        {isConfirmed && item.driver && (
-          <View style={styles.driverSection}>
-            <View style={styles.driverInfoLeft}>
-              <Text style={styles.driverName}>Driver: {item.driver.name}</Text>
-              <Text style={styles.driverPlate}>{item.driver.vehicleNumber}</Text>
-            </View>
-            {item.otp && (
-              <View style={styles.otpBox}>
-                <Text style={styles.otpLabel}>OTP</Text>
-                <Text style={styles.otpNumber}>{item.otp}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Card Footer */}
-        <View style={styles.cardFooter}>
-          <View>
-            <Text style={styles.fareAmount}>
-              {CURRENCY_SYMBOL}{item.fare}
-            </Text>
-            <Text style={styles.paymentMethod}>
-              {['paid', 'rated'].includes(item.status) ? 'Paid' : 'Payment'}: {item.paymentType || 'Cash'}
-            </Text>
-          </View>
-
-          {isConfirmed && (
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => handleCancel(item.id)}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Activities</Text>
-        {rides.length > 0 && (
-          <TouchableOpacity onPress={clearRides} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.clearAllText}>Clear rides</Text>
-          </TouchableOpacity>
-        )}
+  const renderItem = ({ item }) => {
+    const ride = item.type === 'Rides';
+    const shop = item.type === 'Shop';
+    const open = expanded === `${item.type}:${item.id}`;
+    const title = ride ? (item.vehicleName || 'UniGo Ride') : shop ? (item.shopName || 'Shop order') : (item.service || 'Home & Spa booking');
+    const subtitle = ride ? `${item.origin || 'Pickup'} → ${item.destination || 'Destination'}` : shop ? (item.lines || []).map(line => `${line.quantity} × ${line.name}`).join(', ') : `${item.provider || 'Provider'} · ${item.date || ''} ${item.time || ''}`;
+    const status = ride ? (RIDE_STATUS[item.status] || item.status || 'Ride') : shop ? (SHOP_STATUS[item.status] || item.status || 'Order placed') : 'Simulated booking';
+    const amount = ride ? (item.fare != null ? `₹${item.fare}` : 'Fare unavailable') : shop ? (item.total != null ? money(item.total) : 'Total unavailable') : (item.price != null ? `₹${item.price}` : 'Price unavailable');
+    return <TouchableOpacity style={styles.card} accessibilityRole="button" accessibilityLabel={`${title}, ${status}, view details`} onPress={() => ride ? router.push({ pathname: '/(rider)/trip', params: { id: item.id } }) : setExpanded(open ? null : `${item.type}:${item.id}`)} activeOpacity={0.8}>
+      <View style={styles.row}>
+        <View style={styles.icon}><Ionicons name={ride ? 'car-outline' : shop ? 'basket-outline' : 'sparkles-outline'} size={22} color="#08754e" /></View>
+        <View style={styles.main}><Text style={styles.title} numberOfLines={1}>{title}</Text><Text style={styles.date}>{dateLabel(item.createdAt)}</Text></View>
+        <Text style={styles.amount}>{amount}</Text>
       </View>
+      <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
+      <View style={styles.bottom}><Text style={styles.status}>{status}{!ride || item.simulated ? ' · Simulation' : ''}</Text><Text style={styles.details}>{open ? 'Hide details' : 'View details'}  ›</Text></View>
+      {open && !ride && <View style={styles.expanded}>
+        {shop ? <>
+          <Text style={styles.detail}>Delivery: {[item.address?.addressLine, item.address?.area].filter(Boolean).join(', ') || 'Not available'}</Text>
+          {(item.lines || []).map((line, index) => <Text key={`${line.id || line.name}-${index}`} style={styles.detail}>{line.quantity} × {line.name} {line.price != null ? `· ${money(line.price * line.quantity)}` : ''}</Text>)}
+          <Text style={styles.detail}>Payment: {item.paymentLabel || (item.payment === 'online' ? 'Online' : 'Cash on delivery')} · simulated</Text>
+          <Text style={styles.note}>Simulation only. No shop was contacted or delivery arranged.</Text>
+        </> : <>
+          <Text style={styles.detail}>Provider: {item.provider || 'Not available'}</Text>
+          <Text style={styles.detail}>Appointment: {item.date || 'Date unavailable'} {item.time || ''}</Text>
+          <Text style={styles.detail}>Location: {item.address || 'Not available'}</Text>
+          <Text style={styles.note}>Simulation only. No provider was contacted or payment taken.</Text>
+        </>}
+      </View>}
+    </TouchableOpacity>;
+  };
 
-      {rides.length === 0 && serviceBookings.length === 0 && shopOrders.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="receipt-outline" size={44} color={THEME.colors.primary} />
-          </View>
-          <Text style={styles.emptyTitle}>No activities yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Your rides, service bookings and simulated shop orders will appear here.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={[...rides, ...serviceBookings.map((booking) => ({ ...booking, activityType: 'home_spa' })), ...shopOrders.map((order) => ({ ...order, activityType: 'shop_demo' }))].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))}
-          keyExtractor={(item) => item.id}
-          renderItem={renderRideItem}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.header}><Text style={styles.heading}>Activity</Text><Text style={styles.headerSub}>Your rides, orders and bookings</Text></View>
+    <View style={styles.filters}>{FILTERS.map(option => <TouchableOpacity key={option} onPress={() => setFilter(option)} accessibilityRole="button" accessibilityState={{ selected: filter === option }} style={[styles.filter, filter === option && styles.filterActive]}><Text style={[styles.filterText, filter === option && styles.filterTextActive]}>{option}</Text></TouchableOpacity>)}</View>
+    {loadError && <Text style={styles.error}>Some activities could not be loaded. Reopen this screen to try again.</Text>}
+    <FlatList data={visible} keyExtractor={item => `${item.type}:${item.id}`} renderItem={renderItem} contentContainerStyle={visible.length ? styles.list : styles.emptyList} showsVerticalScrollIndicator={false} ListEmptyComponent={<View style={styles.empty}><Ionicons name="receipt-outline" size={38} color="#08754e" /><Text style={styles.emptyTitle}>{!isLoaded ? 'Loading activity…' : filter === 'All' ? 'No activity yet' : `No ${filter.toLowerCase()} yet`}</Text><Text style={styles.emptyText}>Your activity will appear here when you make a booking or order.</Text></View>} />
+  </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: THEME.colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: THEME.fontWeights.extrabold,
-    color: THEME.colors.text,
-  },
-  clearAllText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: THEME.colors.danger,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 90,
-  },
-  rideCard: {
-    backgroundColor: THEME.colors.white,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  rideHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  vehiclePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: THEME.radius.full,
-    gap: 6,
-  },
-  vehicleTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.colors.primaryDark,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: THEME.radius.full,
-  },
-  statusConfirmed: {
-    backgroundColor: '#DEF7EC',
-  },
-  statusCancelled: {
-    backgroundColor: '#FDE8E8',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusTextConfirmed: {
-    color: '#03543F',
-  },
-  statusTextCancelled: {
-    color: '#9B1C1C',
-  },
-  routeContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  timelineIndicators: {
-    alignItems: 'center',
-    marginRight: 12,
-    paddingTop: 4,
-  },
-  dotGreen: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#10B981',
-  },
-  timelineDashed: {
-    width: 2,
-    height: 24,
-    backgroundColor: '#CBD5E1',
-    marginVertical: 3,
-  },
-  dotRed: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#EF4444',
-  },
-  locationsCol: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: THEME.colors.textPrimary,
-  },
-  locationSubtitle: {
-    fontSize: 11,
-    color: THEME.colors.mutedText,
-    marginTop: 1,
-  },
-  driverSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  driverInfoLeft: {
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.colors.textPrimary,
-  },
-  driverPlate: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: THEME.colors.primary,
-    marginTop: 1,
-  },
-  otpBox: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignItems: 'center',
-  },
-  otpLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: THEME.colors.mutedText,
-  },
-  otpNumber: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: THEME.colors.primaryDark,
-    letterSpacing: 1.5,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  fareAmount: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: THEME.colors.textPrimary,
-  },
-  paymentMethod: {
-    fontSize: 11,
-    color: THEME.colors.mutedText,
-  },
-  cancelBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: THEME.radius.full,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  cancelBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.colors.danger,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 36,
-  },
-  iconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#E6F4EA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: THEME.fontWeights.bold,
-    color: THEME.colors.text,
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: THEME.colors.mutedText,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  container: { flex: 1, backgroundColor: '#f6f9f7' },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 15 },
+  heading: { fontSize: 26, fontWeight: '800', color: '#17372a' },
+  headerSub: { fontSize: 13, color: '#718178', marginTop: 3 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 14 },
+  filter: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dce8e0' },
+  filterActive: { backgroundColor: '#08754e', borderColor: '#08754e' },
+  filterText: { fontSize: 12, fontWeight: '700', color: '#52665a' },
+  filterTextActive: { color: '#fff' },
+  list: { paddingHorizontal: 16, paddingBottom: 100 },
+  emptyList: { flexGrow: 1, paddingBottom: 80 },
+  card: { backgroundColor: '#fff', borderRadius: 16, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#e3ece6' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  icon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#e8f5ed', alignItems: 'center', justifyContent: 'center' },
+  main: { flex: 1 },
+  title: { fontSize: 15, fontWeight: '800', color: '#193a2c' },
+  date: { fontSize: 12, color: '#78877e', marginTop: 3 },
+  amount: { fontSize: 15, fontWeight: '800', color: '#193a2c' },
+  subtitle: { color: '#52665b', fontSize: 13, lineHeight: 19, marginTop: 12 },
+  bottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#edf2ee' },
+  status: { flex: 1, color: '#08754e', fontWeight: '700', fontSize: 12 },
+  details: { color: '#52665b', fontWeight: '700', fontSize: 12 },
+  expanded: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#edf2ee', gap: 6 },
+  detail: { color: '#40564a', fontSize: 13, lineHeight: 19 },
+  note: { color: '#78877e', fontSize: 12, lineHeight: 18, marginTop: 4 },
+  error: { color: '#a24032', paddingHorizontal: 18, paddingBottom: 10, fontSize: 12 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 35 },
+  emptyTitle: { color: '#193a2c', fontSize: 18, fontWeight: '800', marginTop: 12 },
+  emptyText: { color: '#78877e', textAlign: 'center', lineHeight: 20, marginTop: 6 },
 });

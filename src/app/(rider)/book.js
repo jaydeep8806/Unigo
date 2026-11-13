@@ -9,7 +9,9 @@ import {
   ScrollView,
   ActivityIndicator,
   Keyboard,
+  Linking,
   Modal,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,7 +22,7 @@ import { useWallet } from '../../context/WalletProvider';
 import { useActivity } from '../../context/ActivityProvider';
 import { THEME } from '../../constants/theme';
 import { CURRENCY_SYMBOL, DEFAULT_CITY } from '../../constants/config';
-import { searchLocations, reverseGeocode } from '../../services/geocoding';
+import { searchLocations, reverseGeocode, searchOnDevice } from '../../services/geocoding';
 import { fetchDrivingRoute } from '../../services/osrm';
 import { calculateAllFares } from '../../services/pricing';
 import LeafletMap from '../../components/LeafletMap';
@@ -36,12 +38,13 @@ export default function BookScreen() {
   const isCarpool = params.type === 'carpool';
   const shouldAutoFocus = params.autoFocus === 'true';
 
-  const { coordinates, selectedCity } = useLocation();
+  const { coordinates, approximateCoordinates, locationIssue, locationDiagnostic, selectedCity, requestLocation } = useLocation();
   const { rides, addRide } = useActivity();
   const { balance } = useWallet();
   const { places, addRecent, savePlace } = useSavedLocations();
 
   const [bookingInProgress, setBookingInProgress] = useState(false);
+  const [locatingPickup, setLocatingPickup] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
   const [reviewRide, setReviewRide] = useState(false);
   const [reviewError, setReviewError] = useState('');
@@ -49,14 +52,17 @@ export default function BookScreen() {
 
   // Active user origin (customizable by user or defaulted to GPS/City)
   const defaultOrigin = useMemo(() => {
-    if (coordinates && coordinates.latitude && coordinates.longitude) {
-      const lat = coordinates.latitude;
-      const lng = coordinates.longitude;
+    const position = coordinates || approximateCoordinates;
+    if (position && position.latitude && position.longitude) {
+      const lat = position.latitude;
+      const lng = position.longitude;
       if (lat >= 6.0 && lat <= 38.5 && lng >= 68.0 && lng <= 98.0) {
         return {
           latitude: lat,
           longitude: lng,
-          title: 'Current Location',
+          title: coordinates ? 'Current Location' : 'Approximate location',
+          isGps: true,
+          needsPickupSelection: !coordinates,
         };
       }
     }
@@ -65,8 +71,9 @@ export default function BookScreen() {
       latitude: city.lat,
       longitude: city.lng,
       title: city.isManual ? city.name : `${city.name} Center`,
+      needsPickupSelection: !city.isManual,
     };
-  }, [coordinates, selectedCity]);
+  }, [coordinates, approximateCoordinates, selectedCity]);
 
   // Dual origin and destination states
   const [customOrigin, setCustomOrigin] = useState(null);
@@ -83,9 +90,11 @@ export default function BookScreen() {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isEditingLocation, setIsEditingLocation] = useState(false);
   const [searchError, setSearchError] = useState(false);
+  const [deviceSearchMessage, setDeviceSearchMessage] = useState('');
 
   // Pin Drop (Picker) mode state
   const [isPickerMode, setIsPickerMode] = useState(false);
+  const [pickerTarget, setPickerTarget] = useState('drop');
   const [pickerCoords, setPickerCoords] = useState(null);
   const [pickerAddress, setPickerAddress] = useState('');
   const [pickerAddressLoading, setPickerAddressLoading] = useState(false);
@@ -98,6 +107,7 @@ export default function BookScreen() {
   const [routeCoords, setRouteCoords] = useState([]);
   const [routeInfo, setRouteInfo] = useState(null); // { distanceKm, durationMins }
   const [routeLoading, setRouteLoading] = useState(false);
+  const routeRequestRef = useRef(0);
   const [selectedVehicle, setSelectedVehicle] = useState('bike');
 
   // Feedback toast
@@ -124,11 +134,34 @@ export default function BookScreen() {
     clearTimeout(pickerDebounceRef.current);
     searchRequestRef.current += 1;
     pickerRequestRef.current += 1;
+    routeRequestRef.current += 1;
   }, []);
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setToastVisible(true);
+  };
+
+  const useCurrentPickup = async () => {
+    if (locatingPickup) return;
+    Keyboard.dismiss();
+    setIsEditingLocation(false);
+    setShowSearchResults(false);
+    searchRequestRef.current += 1;
+    clearTimeout(debounceTimerRef.current);
+    setIsSearching(false);
+    setLocatingPickup(true);
+    showToast('Finding your current location…');
+    try {
+      const result = await requestLocation();
+      if (result.located) {
+        setCustomOrigin(null);
+        setFlyToCoords(null);
+        showToast('Location found. Check your pickup on the map.');
+      }
+    } finally {
+      setLocatingPickup(false);
+    }
   };
 
   // Auto-focus if requested
@@ -150,7 +183,7 @@ export default function BookScreen() {
   }, [pickerCoords, origin]);
 
   // Avoid selecting essentially the same point as pickup while allowing short rides.
-  const isTooClose = pickerDistKm !== null && pickerDistKm < 0.02;
+  const isTooClose = pickerTarget === 'drop' && pickerDistKm !== null && pickerDistKm < 0.02;
 
   // Real-time Rapido fare estimate for the picker banner
   const estPickerFare = useMemo(() => {
@@ -166,10 +199,27 @@ export default function BookScreen() {
     return { bike, auto };
   }, [pickerDistKm]);
 
+  const matchingSavedPlaces = useMemo(() => {
+    const query = (activeSearchField === 'pickup' ? pickupQuery : dropQuery).trim().toLowerCase();
+    if (query.length < 2) return [];
+    const ridePlaces = activeSearchField === 'drop' ? rides.filter(ride => ride.destinationCoords && ride.destination).map(ride => ({ id: `ride-${ride.id}`, title: ride.destination, latitude: ride.destinationCoords.latitude, longitude: ride.destinationCoords.longitude })) : [];
+    const candidates = [...Object.values(places.saved), ...places.recent, ...ridePlaces];
+    const seen = new Set();
+    return candidates.filter(place => {
+      const lat = Number(place.latitude);
+      const lng = Number(place.longitude);
+      const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 6 || lat > 38.5 || lng < 68 || lng > 98 || seen.has(key) || !`${place.title || ''} ${place.subtitle || ''}`.toLowerCase().includes(query)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 5);
+  }, [activeSearchField, pickupQuery, dropQuery, rides, places]);
+
   // Debounced search query for autocomplete (pickup or drop)
   const handleSearchChange = (text, field = activeSearchField) => {
     const requestId = ++searchRequestRef.current;
     setSearchError(false);
+    setDeviceSearchMessage('');
     setSearchResults([]);
     if (field === 'pickup') {
       setPickupQuery(text);
@@ -201,36 +251,75 @@ export default function BookScreen() {
     }, 800);
   };
 
+  const handleDeviceSearch = async () => {
+    const query = activeSearchField === 'pickup' ? pickupQuery : dropQuery;
+    const requestId = ++searchRequestRef.current;
+    clearTimeout(debounceTimerRef.current);
+    setIsSearching(true);
+    setDeviceSearchMessage('');
+    try {
+      const results = await searchOnDevice(query, selectedCity?.name);
+      if (requestId !== searchRequestRef.current) return;
+      setSearchResults(results);
+      setSearchError(false);
+      if (!results.length) setDeviceSearchMessage('No device results. Try a more specific address and city.');
+      else setDeviceSearchMessage('Device results · check the address and map pin before booking.');
+    } catch (error) {
+      if (requestId === searchRequestRef.current) setDeviceSearchMessage(error.message || 'Device search is unavailable.');
+    } finally {
+      if (requestId === searchRequestRef.current) setIsSearching(false);
+    }
+  };
+
   // Calculate driving route using OSRM
   const calculateRoute = useCallback(async (start, end) => {
+    const requestId = ++routeRequestRef.current;
     setRouteLoading(true);
+    setRouteCoords([]);
+    setRouteInfo(null);
     try {
       const data = await fetchDrivingRoute(
         { latitude: start.latitude, longitude: start.longitude },
         { latitude: end.latitude, longitude: end.longitude }
       );
+      if (requestId !== routeRequestRef.current) return;
       setRouteCoords(data.coordinates.map((c) => [c.latitude, c.longitude]));
       setRouteInfo({
         distanceKm: +(data.distanceMeters / 1000).toFixed(1),
         durationMins: Math.max(1, Math.round(data.durationSeconds / 60)),
       });
     } catch {
+      if (requestId !== routeRequestRef.current) return;
       // Fallback straight line
       setRouteCoords([
         [start.latitude, start.longitude],
         [end.latitude, end.longitude],
       ]);
       const dLat = (end.latitude - start.latitude) * 111;
-      const dLon = (end.longitude - start.longitude) * 111;
+      const dLon = (end.longitude - start.longitude) * 111 * Math.cos((start.latitude * Math.PI) / 180);
       const dist = +Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
       setRouteInfo({
         distanceKm: Math.max(0.5, dist),
         durationMins: Math.max(2, Math.round(dist * 3)),
+        estimated: true,
       });
     } finally {
-      setRouteLoading(false);
+      if (requestId === routeRequestRef.current) setRouteLoading(false);
     }
   }, []);
+
+  // Recalculate if a GPS fix arrives or changes after the destination was selected.
+  const lastGpsRouteRef = useRef(null);
+  useEffect(() => {
+    if (customOrigin || !destination || !defaultOrigin.isGps) {
+      lastGpsRouteRef.current = null;
+      return;
+    }
+    const key = `${defaultOrigin.latitude},${defaultOrigin.longitude}:${destination.latitude},${destination.longitude}`;
+    if (lastGpsRouteRef.current === key) return;
+    lastGpsRouteRef.current = key;
+    calculateRoute(defaultOrigin, destination);
+  }, [customOrigin, destination, defaultOrigin, calculateRoute]);
 
   // Select place from autocomplete
   const handleSelectPlace = useCallback(
@@ -267,9 +356,35 @@ export default function BookScreen() {
     [activeSearchField, destination, origin, calculateRoute, addRecent]
   );
 
+  const openRecentTrip = (ride) => {
+    if (['searching', 'requested', 'assigned', 'arrived', 'in_progress'].includes(ride.status)) {
+      router.push({ pathname: '/(rider)/trip', params: { id: ride.id } });
+      return;
+    }
+    const point = ride.destinationCoords;
+    const lat = Number(point?.latitude);
+    const lng = Number(point?.longitude);
+    if (!point || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < 6 || lat > 38.5 || lng < 68 || lng > 98) {
+      setActiveSearchField('drop');
+      setIsEditingLocation(true);
+      handleSearchChange(ride.destination || '', 'drop');
+      showToast('Select the destination from search to book again.');
+      return;
+    }
+    const nextDestination = { latitude: lat, longitude: lng, title: ride.destination || 'Destination' };
+    setDestination(nextDestination);
+    setDropQuery(nextDestination.title);
+    setSelectedVehicle(['bike', 'auto', 'car', 'sedan'].includes(ride.vehicleId) ? ride.vehicleId : 'bike');
+    calculateRoute(origin, nextDestination);
+  };
+
   // Swap pickup and drop
   const handleSwapLocations = useCallback(() => {
     if (!destination) return;
+    if (origin.needsPickupSelection) {
+      showToast('Choose an exact pickup before swapping locations.');
+      return;
+    }
     const tempOrigin = origin;
     setCustomOrigin(destination);
     setPickupQuery(destination.title);
@@ -311,6 +426,7 @@ export default function BookScreen() {
   // Toggle Pin Drop mode
   const togglePickerMode = useCallback(() => {
     const next = !isPickerMode;
+    if (next) setPickerTarget('drop');
     setIsPickerMode(next);
     setIsEditingLocation(false);
     setShowSearchResults(false);
@@ -332,6 +448,18 @@ export default function BookScreen() {
     }
   }, [isPickerMode, destination, origin, fetchPickerAddress]);
 
+  const choosePickupOnMap = () => {
+    Keyboard.dismiss();
+    setIsEditingLocation(false);
+    setShowSearchResults(false);
+    setPickerTarget('pickup');
+    setIsPickerMode(true);
+    const initial = { lat: origin.latitude, lng: origin.longitude };
+    setPickerCoords(initial);
+    setFlyToCoords({ ...initial, timestamp: Date.now() });
+    fetchPickerAddress(initial.lat, initial.lng);
+  };
+
   // Confirm pin picker
   const handleConfirmPicker = async () => {
     if (isTooClose) {
@@ -344,6 +472,15 @@ export default function BookScreen() {
     };
     setIsPickerMode(false);
     setFlyToCoords(null);
+    if (pickerTarget === 'pickup') {
+      let geo = {};
+      try { geo = await reverseGeocode(target.lat, target.lng); } catch { /* The selected pin is still usable. */ }
+      const pickup = { latitude: target.lat, longitude: target.lng, title: geo.title || 'Pinned pickup', subtitle: geo.subtitle };
+      setCustomOrigin(pickup);
+      setPickupQuery(pickup.title);
+      if (destination) await calculateRoute(pickup, destination);
+      return;
+    }
     try {
       const geo = await reverseGeocode(target.lat, target.lng);
       const dest = {
@@ -409,7 +546,7 @@ export default function BookScreen() {
   }, [fares, selectedVehicle]);
 
   const handleConfirmRide = async () => {
-    if (!destination || !selectedFareObj) return;
+    if (!destination || !selectedFareObj || origin.needsPickupSelection) return;
 
     setReviewError('');
     setBookingInProgress(true);
@@ -455,6 +592,7 @@ export default function BookScreen() {
           onCenterChange={handleCenterChange}
           onDraggingChange={setIsMapDragging}
           fitBounds={fitBounds}
+          fitPadding={destination && !isPickerMode ? { top: insets.top + 170, bottom: Math.min(screenHeight * 0.42, 360) + 20 } : undefined}
         />
       </View>
 
@@ -462,7 +600,7 @@ export default function BookScreen() {
       {isPickerMode && (
         <View style={styles.centerPinWrapper} pointerEvents="none">
           <View style={styles.centerTooltip}>
-            <Text style={styles.centerTooltipText}>Drop Location</Text>
+            <Text style={styles.centerTooltipText}>{pickerTarget === 'pickup' ? 'Pickup Location' : 'Drop Location'}</Text>
             <Text style={styles.centerTooltipSub}>Drag map or tap to move</Text>
           </View>
           <View
@@ -507,13 +645,15 @@ export default function BookScreen() {
         <TouchableOpacity
           style={[
             styles.floatingRecenterBtn,
-            { bottom: Math.max(insets.bottom + 24, destination ? screenHeight * 0.57 : (rides.length > 0 ? 192 : 24)) },
+            { bottom: Math.max(insets.bottom + 24, destination ? Math.min(screenHeight * 0.42, 360) + 20 : (rides.length > 0 ? 192 : 24)) },
           ]}
-          onPress={() => setFlyToCoords({ lat: origin.latitude, lng: origin.longitude, timestamp: Date.now() })}
-          accessibilityLabel="Recenter on pickup"
+          onPress={useCurrentPickup}
+          disabled={locatingPickup}
+          accessibilityRole="button"
+          accessibilityLabel="Use current location for pickup"
         >
           <Ionicons name="locate" size={18} color={THEME.colors.primary} />
-          <Text style={styles.recenterBtnText}>Pickup</Text>
+          <Text style={styles.recenterBtnText}>{locatingPickup ? 'Locating…' : 'Current location'}</Text>
         </TouchableOpacity>
       )}
 
@@ -641,6 +781,10 @@ export default function BookScreen() {
                       searchRequestRef.current += 1;
                       clearTimeout(debounceTimerRef.current);
                       setIsSearching(false);
+                      routeRequestRef.current += 1;
+                      setRouteLoading(false);
+                      setRouteCoords([]);
+                      setRouteInfo(null);
                       setDropQuery('');
                       setDestination(null);
                       setSearchResults([]);
@@ -671,19 +815,45 @@ export default function BookScreen() {
           <View style={styles.pickerModeBanner}>
             <Ionicons name="navigate-circle" size={20} color="#065F46" style={{ marginRight: 8 }} />
             <Text style={styles.pickerModeBannerText}>
-              Pan the map to position the pin on your drop spot
+              {pickerTarget === 'pickup' ? 'Pan the map to position the pin on your pickup' : 'Pan the map to position the pin on your drop spot'}
             </Text>
           </View>
         )}
 
+        {!isPickerMode && !isEditingLocation && origin.needsPickupSelection && (
+          <View style={styles.locationNotice} accessibilityRole="alert">
+            <Text style={styles.locationNoticeText}>
+              {locatingPickup ? 'Finding your location…' : locationIssue || 'City centre is only a starting point. Tap Current location to find your pickup.'}
+            </Text>
+            {!!locationIssue && !locatingPickup && !!locationDiagnostic && <Text style={styles.locationNoticeText}>{locationDiagnostic}</Text>}
+            {!!locationIssue && !locatingPickup && <View style={styles.locationNoticeActions}>
+              <TouchableOpacity onPress={choosePickupOnMap} accessibilityRole="button"><Text style={styles.locationNoticeAction}>Choose pickup on map</Text></TouchableOpacity>
+              {Platform.OS !== 'web' && <TouchableOpacity onPress={() => Linking.openSettings().catch(() => showToast('Open Expo Go location permissions in your phone settings.'))} accessibilityRole="button"><Text style={styles.locationNoticeAction}>Open app settings</Text></TouchableOpacity>}
+            </View>}
+          </View>
+        )}
+
+        {isEditingLocation && activeSearchField === 'pickup' && (
+          <TouchableOpacity style={[styles.resultItem, { backgroundColor: '#fff', borderRadius: 12 }]} onPress={useCurrentPickup} accessibilityRole="button">
+            <Ionicons name="locate" size={18} color={THEME.colors.primary} style={{ marginRight: 10 }} />
+            <Text style={styles.resultTitle}>Use current location</Text>
+          </TouchableOpacity>
+        )}
+        {isEditingLocation && activeSearchField === 'pickup' && (
+          <TouchableOpacity style={[styles.resultItem, { backgroundColor: '#fff', borderRadius: 12 }]} onPress={choosePickupOnMap} accessibilityRole="button">
+            <Ionicons name="map-outline" size={18} color={THEME.colors.primary} style={{ marginRight: 10 }} />
+            <Text style={styles.resultTitle}>Choose pickup on map</Text>
+          </TouchableOpacity>
+        )}
         {/* Autocomplete Results Dropdown */}
-        {showSearchResults && (searchResults.length > 0 || (!isSearching && (searchError || (activeSearchField === 'pickup' ? pickupQuery : dropQuery).trim().length >= 2))) && (
+        {showSearchResults && (activeSearchField === 'pickup' ? pickupQuery : dropQuery).trim().length >= 2 && (
           <View style={styles.resultsCard}>
             <ScrollView
               keyboardShouldPersistTaps="handled"
               style={{ maxHeight: 220 }}
             >
-              {searchResults.map((item) => (
+              {matchingSavedPlaces.map((item, index) => <TouchableOpacity key={`saved-${item.id || index}`} style={styles.resultItem} onPress={() => handleSelectPlace(item)}><Ionicons name="time-outline" size={18} color={THEME.colors.primary} style={{ marginRight: 10 }} /><View style={{ flex: 1 }}><Text style={styles.resultTitle}>{item.title}</Text><Text style={styles.resultSubtitle}>Recent or saved place{item.subtitle ? ` · ${item.subtitle}` : ''}</Text></View></TouchableOpacity>)}
+              {searchResults.filter(item => !matchingSavedPlaces.some(saved => Math.abs(Number(saved.latitude) - item.latitude) < 0.00001 && Math.abs(Number(saved.longitude) - item.longitude) < 0.00001)).map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={styles.resultItem}
@@ -702,7 +872,10 @@ export default function BookScreen() {
                   </View>
                 </TouchableOpacity>
               ))}
-              {!searchResults.length && <Text style={styles.searchEmpty}>{searchError ? 'Location search is unavailable. Check your connection and try again.' : 'No places found. Try another area or add the city name.'}</Text>}
+              {!!deviceSearchMessage && <Text style={styles.searchEmpty}>{deviceSearchMessage}</Text>}
+              {isSearching && <Text style={styles.searchEmpty}>Searching places…</Text>}
+              {!isSearching && searchError && <View><Text style={styles.searchEmpty}>Online search is unavailable. Check your connection or select a saved place.</Text><TouchableOpacity style={styles.resultItem} accessibilityRole="button" onPress={() => handleSearchChange(activeSearchField === 'pickup' ? pickupQuery : dropQuery, activeSearchField)}><Text style={styles.resultTitle}>Retry search</Text></TouchableOpacity>{Platform.OS !== 'web' && <TouchableOpacity style={styles.resultItem} accessibilityRole="button" onPress={handleDeviceSearch}><Text style={styles.resultTitle}>Search on this device</Text></TouchableOpacity>}</View>}
+              {!isSearching && !searchError && !searchResults.length && !matchingSavedPlaces.length && <Text style={styles.searchEmpty}>No places found. Try another area or add the city name.</Text>}
             </ScrollView>
             <Text style={styles.searchAttribution}>Location data © OpenStreetMap contributors</Text>
           </View>
@@ -725,12 +898,12 @@ export default function BookScreen() {
               <Text style={styles.recentSeeAll}>See all</Text>
             </TouchableOpacity>
           </View>
-          {rides.slice(0, 2).map((ride) => (
-            <TouchableOpacity key={ride.id} style={styles.recentTripRow} onPress={() => router.push({ pathname: '/(rider)/trip', params: { id: ride.id } })}>
+          {[...rides].sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)).slice(0, 2).map((ride) => (
+            <TouchableOpacity key={ride.id} style={styles.recentTripRow} onPress={() => openRecentTrip(ride)}>
               <Ionicons name="time-outline" size={20} color={THEME.colors.primary} />
               <View style={styles.recentTripText}>
                 <Text style={styles.recentDestination} numberOfLines={1}>{ride.destination}</Text>
-                <Text style={styles.recentDetails} numberOfLines={1}>{ride.vehicleName} · {CURRENCY_SYMBOL}{ride.fare}</Text>
+                <Text style={styles.recentDetails} numberOfLines={1}>{['searching', 'requested', 'assigned', 'arrived', 'in_progress'].includes(ride.status) ? 'View active ride' : 'Book again · fare will be recalculated'}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={THEME.colors.mutedText} />
             </TouchableOpacity>
@@ -743,8 +916,8 @@ export default function BookScreen() {
         <View style={[styles.pickerConfirmWrap, { bottom: Math.max(16, insets.bottom + 8) }]}>
           <View style={styles.pickerAddressCard}>
             <View style={styles.pickerAddressHeader}>
-              <Text style={styles.pickerAddressLabel}>Selected Drop Point</Text>
-              {pickerDistKm !== null && (
+              <Text style={styles.pickerAddressLabel}>{pickerTarget === 'pickup' ? 'Selected Pickup Point' : 'Selected Drop Point'}</Text>
+              {pickerTarget === 'drop' && pickerDistKm !== null && (
                 <Text style={[styles.pickerDistBadge, isTooClose && styles.pickerDistBadgeWarn]}>
                   {pickerDistKm} km from pickup
                 </Text>
@@ -759,7 +932,7 @@ export default function BookScreen() {
                 <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginLeft: 8 }} />
               )}
             </View>
-            {estPickerFare && !isTooClose && (
+            {pickerTarget === 'drop' && estPickerFare && !isTooClose && (
               <Text style={styles.pickerFareEstimate}>
                 Estimate: ₹{estPickerFare.bike} (Bike) • ₹{estPickerFare.auto} (Auto)
               </Text>
@@ -782,7 +955,7 @@ export default function BookScreen() {
               style={{ marginRight: 8 }}
             />
             <Text style={styles.confirmPinText}>
-              {isTooClose ? 'Too Close to Pickup' : 'Set as Drop Location'}
+              {isTooClose ? 'Too Close to Pickup' : pickerTarget === 'pickup' ? 'Set as Pickup Location' : 'Set as Drop Location'}
             </Text>
           </PressableScale>
         </View>
@@ -790,7 +963,7 @@ export default function BookScreen() {
 
       {/* Bottom Sheet Card: Fares & Booking */}
       {destination && !isPickerMode && !isEditingLocation && pickupQuery === origin.title && dropQuery === destination.title && (
-        <View style={[styles.bottomSheet, { height: Math.min(screenHeight * 0.55, 410), paddingBottom: Math.max(12, insets.bottom + 8) }]}>
+        <View style={[styles.bottomSheet, { height: Math.min(screenHeight * 0.42, 360), paddingBottom: Math.max(12, insets.bottom + 8) }]}>
           <ScrollView style={styles.fareScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.saveLocations}><Text style={styles.saveLocationsLabel}>Save destination as</Text>{['Home', 'Work', 'College'].map((label) => <TouchableOpacity key={label} onPress={() => { savePlace(label, { id: `${destination.latitude}-${destination.longitude}`, ...destination }); showToast(`Saved as ${label}`); }}><Text style={styles.saveLocationLink}>{label}</Text></TouchableOpacity>)}</View>
           {/* Carpool split notification badge */}
@@ -803,6 +976,8 @@ export default function BookScreen() {
             </View>
           )}
 
+          {routeInfo?.estimated && <Text style={{ color: '#9a5b00', fontSize: 12, marginBottom: 6 }}>Road route unavailable · distance and fare are estimates</Text>}
+          {origin.needsPickupSelection && <Text style={{ color: '#9a5b00', fontSize: 12, marginBottom: 6 }}>Choose your exact pickup on the map before booking.</Text>}
           {/* Route meta stats */}
           <View style={styles.routeMetaRow}>
             <View style={styles.routeStat}>
@@ -874,7 +1049,7 @@ export default function BookScreen() {
           <TouchableOpacity
             style={styles.bookButton}
             onPress={() => { setReviewError(''); setReviewRide(true); }}
-            disabled={bookingInProgress || routeLoading}
+            disabled={bookingInProgress || routeLoading || origin.needsPickupSelection}
             accessibilityRole="button"
           >
             {bookingInProgress || routeLoading ? (
@@ -909,9 +1084,9 @@ export default function BookScreen() {
             </View>
             <Text style={styles.reviewSectionTitle}>Your route</Text>
             <View style={styles.reviewCard}>
-              <View style={styles.reviewRouteRow}><View style={[styles.reviewPoint, { backgroundColor: '#10b981' }]} /><View style={{ flex: 1 }}><Text style={styles.reviewLabel}>PICKUP</Text><Text style={styles.reviewAddress}>{origin.title}</Text></View></View>
+              <View style={styles.reviewRouteRow}><View style={[styles.reviewPoint, { backgroundColor: '#10b981' }]} /><View style={{ flex: 1 }}><Text style={styles.reviewLabel}>PICKUP</Text><Text style={styles.reviewAddress}>{origin.title}{origin.subtitle ? `, ${origin.subtitle}` : ''}</Text></View></View>
               <View style={styles.reviewRouteDivider} />
-              <View style={styles.reviewRouteRow}><View style={[styles.reviewPoint, { backgroundColor: '#ef4444' }]} /><View style={{ flex: 1 }}><Text style={styles.reviewLabel}>DROP</Text><Text style={styles.reviewAddress}>{destination.title}</Text></View></View>
+              <View style={styles.reviewRouteRow}><View style={[styles.reviewPoint, { backgroundColor: '#ef4444' }]} /><View style={{ flex: 1 }}><Text style={styles.reviewLabel}>DROP</Text><Text style={styles.reviewAddress}>{destination.title}{destination.subtitle ? `, ${destination.subtitle}` : ''}</Text></View></View>
             </View>
             <Text style={styles.reviewSectionTitle}>Payment method</Text>
             <View style={styles.reviewCard}>
@@ -1276,6 +1451,10 @@ const styles = StyleSheet.create({
     ...THEME.shadows.card,
     zIndex: 20,
   },
+  locationNotice: { marginTop: 8, borderRadius: 12, padding: 10, backgroundColor: '#fff8e6' },
+  locationNoticeText: { color: '#805200', fontSize: 12, lineHeight: 17 },
+  locationNoticeActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 8 },
+  locationNoticeAction: { color: '#0f7a56', fontSize: 12, fontWeight: '700', paddingVertical: 4 },
   recenterBtnText: {
     fontSize: 11,
     fontWeight: THEME.fontWeights.bold,

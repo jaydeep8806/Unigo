@@ -22,46 +22,56 @@ function MenuRow({ icon, title, subtitle, onPress, last, danger }) {
 
 export default function ProfileScreen() {
   const { selectedCity } = useLocation();
-  const { logout } = useSession();
+  const { logout, user } = useSession();
   const { balance } = useWallet();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [profile, setProfile] = useState({ name: '', phone: '' });
+  const [savedProfile, setProfile] = useState({ key: null, name: '', phone: '' });
   const [draft, setDraft] = useState({ name: '', phone: '' });
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState('');
+  const profileKey = user ? `${PROFILE_KEY}:${user.id}` : PROFILE_KEY;
+  const profile = savedProfile.key === profileKey ? savedProfile : { name: '', phone: '' };
 
   useEffect(() => {
     let active = true;
-    AsyncStorage.getItem(PROFILE_KEY).then(value => {
+    AsyncStorage.getItem(profileKey).then(value => {
       if (active && value) {
         const saved = JSON.parse(value);
-        setProfile({ name: typeof saved.name === 'string' ? saved.name : '', phone: typeof saved.phone === 'string' ? saved.phone : '' });
+        setProfile({ key: profileKey, name: typeof saved.name === 'string' ? saved.name : '', phone: typeof saved.phone === 'string' ? saved.phone : '' });
       }
     }).catch(() => { if (active) setError('Could not load your profile details.'); });
     return () => { active = false; };
-  }, []);
+  }, [profileKey]);
 
-  const editProfile = () => { setDraft(profile); setError(''); setEditing(true); };
+  const editProfile = () => { setDraft({ phone: profile.phone, name: profile.name || user?.user_metadata?.full_name || '' }); setError(''); setEditing(true); };
   const saveProfile = async () => {
     const next = { name: draft.name.trim(), phone: draft.phone.trim() };
     if (!next.name) { setError('Please enter your name.'); return; }
     setSaving(true);
     try {
-      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(next));
-      setProfile(next); setEditing(false); setError('');
+      await AsyncStorage.setItem(profileKey, JSON.stringify(next));
+      setProfile({ ...next, key: profileKey }); setEditing(false); setError('');
     } catch { setError('Could not save your details. Please try again.'); }
     finally { setSaving(false); }
   };
   const openSettings = async () => {
     try { await Linking.openSettings(); } catch { Alert.alert('Unable to open settings', 'Please open your device settings to manage location permissions.'); }
   };
+  const performLogout = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try { await logout(); }
+    catch { setError('Could not sign out. Please try again.'); }
+    finally { setSigningOut(false); }
+  };
   const endSession = () => {
-    if (Platform.OS === 'web') { logout(); return; }
-    Alert.alert('End guest session?', 'You can return to UNIGO whenever you are ready.', [
+    if (Platform.OS === 'web') { performLogout(); return; }
+    Alert.alert(user ? 'Log out?' : 'End guest session?', 'You can return to UNIGO whenever you are ready.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'End session', style: 'destructive', onPress: () => { logout(); } },
+      { text: user ? 'Log out' : 'End session', style: 'destructive', onPress: performLogout },
     ]);
   };
   const city = [selectedCity?.name, selectedCity?.state].filter(Boolean).join(', ') || 'Not selected';
@@ -73,8 +83,8 @@ export default function ProfileScreen() {
         <View style={styles.header}><View><Text style={styles.eyebrow}>YOUR ACCOUNT</Text><Text style={styles.heading}>Profile</Text></View><View style={styles.headerMark}><Ionicons name="person-outline" size={21} color="#147653" /></View></View>
         <View style={styles.hero}>
           <View style={styles.heroTop}><View style={styles.avatar}>{initials ? <Text style={styles.initials}>{initials}</Text> : <Ionicons name="person" size={30} color="#167855" />}</View><Pressable accessibilityRole="button" onPress={editProfile} style={styles.editButton}><Ionicons name="pencil-outline" size={15} color="#fff" /><Text style={styles.editText}>Edit</Text></Pressable></View>
-          <Text style={styles.name}>{profile.name || 'Hello, rider'}</Text>
-          <Text style={styles.heroSubtitle}>{profile.phone || 'Make your UNIGO profile your own'}</Text>
+          <Text style={styles.name}>{profile.name || user?.user_metadata?.full_name || 'Hello, rider'}</Text>
+          <Text style={styles.heroSubtitle}>{user?.email || profile.phone || 'Make your UNIGO profile your own'}</Text>
           <View style={styles.badge}><View style={styles.badgeDot} /><Text style={styles.badgeText}>RIDER PROFILE</Text></View>
         </View>
         {error && !editing ? <Text style={styles.error}>{error}</Text> : null}
@@ -91,7 +101,10 @@ export default function ProfileScreen() {
           <MenuRow icon="swap-horizontal-outline" title="Switch to driver" subtitle="Choose how you use UNIGO" onPress={() => router.push('/role-selection')} last />
         </View>
         <Text style={styles.sectionLabel}>SESSION</Text>
-        <View style={styles.card}><MenuRow icon="log-out-outline" title="End guest session" subtitle="Return to the welcome screen" onPress={endSession} danger last /></View>
+        <View style={styles.card}>
+          {!user && <MenuRow icon="log-in-outline" title="Log in or sign up" subtitle="Access your account across devices" onPress={() => router.push('/login')} />}
+          <MenuRow icon="log-out-outline" title={signingOut ? 'Signing out…' : user ? 'Log out' : 'End guest session'} subtitle="Return to the welcome screen" onPress={endSession} danger last />
+        </View>
         <Text style={styles.footer}>Your profile details are saved on this device.</Text>
       </ScrollView>
       <Modal visible={editing} animationType="slide" onRequestClose={() => !saving && setEditing(false)}>
