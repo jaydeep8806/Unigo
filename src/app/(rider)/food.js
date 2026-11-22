@@ -5,24 +5,17 @@ import {
   View,
   FlatList,
   TextInput,
-  Dimensions,
-  Pressable,
-  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
-import { foodImage } from '../../data/foodImages';
 import FoodPhoto from '../../components/commerce/FoodPhoto';
 import { useLocation } from '../../context/LocationProvider';
 import { THEME } from '../../constants/theme';
 import PressableScale from '../../components/PressableScale';
 import { RESTAURANTS, FOOD_CATEGORIES, CUISINE_BANNERS } from '../../data/restaurants';
 import { useFoodCart } from '../../context/FoodCartProvider';
-
-const { width: SW } = Dimensions.get('window');
 
 // ── Helpers ────────────────────────────────────────────────────────────
 const ratingColor = (r) => (r >= 4 ? '#22C55E' : r >= 3 ? '#F59E0B' : '#EF4444');
@@ -36,7 +29,7 @@ export default function FoodScreen() {
 
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
-  const vegOnly = true;
+  const [vegOnly, setVegOnly] = useState(false);
 
   // ── Filter restaurants ───────────────────────────────────────────────
   const filteredRestaurants = useMemo(() => {
@@ -45,13 +38,16 @@ export default function FoodScreen() {
     if (activeCategory !== 'all') {
       list = list.filter((r) => r.category === activeCategory);
     }
+    if (vegOnly) {
+      list = list.filter((r) => r.veg);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
         (r) =>
           r.name.toLowerCase().includes(q) ||
           r.cuisine.toLowerCase().includes(q) ||
-          r.menu.some((section) => section.items.some ( (dish) => dish.name.toLowerCase().includes(q)))
+          r.menu.some((section) => section.items.some((dish) => dish.name.toLowerCase().includes(q)))
       );
     }
     // Promoted first, then by rating
@@ -285,7 +281,13 @@ export default function FoodScreen() {
             </View>
 
             {/* Veg toggle */}
-            <View style={[styles.vegToggle, styles.vegToggleActive]}>
+            <PressableScale
+              style={[styles.vegToggle, vegOnly && styles.vegToggleActive]}
+              onPress={() => setVegOnly((prev) => !prev)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: vegOnly }}
+              accessibilityLabel="Filter vegetarian only"
+            >
               <View
                 style={[
                   styles.vegToggleDot,
@@ -300,7 +302,7 @@ export default function FoodScreen() {
               >
                 VEG
               </Text>
-            </View>
+            </PressableScale>
           </View>
         </LinearGradient>
 
@@ -341,7 +343,6 @@ export default function FoodScreen() {
       totalItems,
       search,
       vegOnly,
-      activeCategory,
       selectedCity,
       coordinates,
       filteredRestaurants.length,
@@ -380,10 +381,28 @@ export default function FoodScreen() {
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={EmptyState}
         contentContainerStyle={{
-          paddingBottom: insets.bottom + 24,
+          paddingBottom: totalItems > 0 ? insets.bottom + 80 : insets.bottom + 24,
         }}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* Floating View Cart bar */}
+      {totalItems > 0 && (
+        <View style={[styles.floatingCartWrap, { bottom: insets.bottom + 12 }]}>
+          <PressableScale
+            style={styles.floatingCartBtn}
+            onPress={() => router.push('/(rider)/cart')}
+          >
+            <View style={styles.floatingCartLeft}>
+              <View style={styles.floatingCartBadge}>
+                <Text style={styles.floatingCartBadgeText}>{totalItems}</Text>
+              </View>
+              <Text style={styles.floatingCartText}>View Cart</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </PressableScale>
+        </View>
+      )}
     </View>
   );
 }
@@ -679,6 +698,50 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: THEME.colors.mutedText,
     textAlign: 'center',
+  },
+
+  /* Floating Cart */
+  floatingCartWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+  },
+  floatingCartBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#0F7A56',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  floatingCartLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  floatingCartBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingCartBadgeText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  floatingCartText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
   },
 });
 

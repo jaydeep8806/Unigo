@@ -22,10 +22,11 @@ export function FoodCartProvider({ children }) {
       return next;
     });
   }, []);
+  const clearCart = useCallback(() => setQuantities({}), []);
   const items = useMemo(() => Object.entries(quantities).filter(([id]) => catalog[id]).map(([id, quantity]) => ({ ...catalog[id], quantity })), [quantities]);
   const totalItems = items.reduce((total, item) => total + item.quantity, 0);
   const itemTotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  const value = useMemo(() => ({ quantities, items, totalItems, itemTotal, updateQuantity }), [quantities, items, totalItems, itemTotal, updateQuantity]);
+  const value = useMemo(() => ({ quantities, items, totalItems, itemTotal, updateQuantity, clearCart }), [quantities, items, totalItems, itemTotal, updateQuantity, clearCart]);
   return <FoodCartContext.Provider value={value}>{children}</FoodCartContext.Provider>;
 }
 

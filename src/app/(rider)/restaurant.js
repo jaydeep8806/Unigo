@@ -5,7 +5,6 @@ import {
   View,
   SectionList,
   Pressable,
-  Dimensions,
   Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -19,7 +18,6 @@ import PressableScale from '../../components/PressableScale';
 import { RESTAURANTS } from '../../data/restaurants';
 import { useFoodCart } from '../../context/FoodCartProvider';
 
-const { width: SW } = Dimensions.get('window');
 const ratingColor = (r) => (r >= 4 ? '#22C55E' : r >= 3 ? '#F59E0B' : '#EF4444');
 
 export default function RestaurantScreen() {

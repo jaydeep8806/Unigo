@@ -6,8 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useActivity } from '../../../context/ActivityProvider';
 import { loadDemo, money } from '../../../services/shopDemo';
+import { getFoodOrders } from '../../../services/foodOrders';
 
-const FILTERS = ['All', 'Rides', 'Shop', 'Home & Spa'];
+const FILTERS = ['All', 'Rides', 'Food', 'Shop', 'Home & Spa'];
 const SUCCESSFUL_RIDE_STATUSES = ['completed', 'payment_pending', 'paid', 'rated'];
 const RIDE_STATUS = { searching: 'Finding driver', requested: 'Awaiting driver', unavailable: 'No driver available', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' };
 const SHOP_STATUS = { PLACED: 'Order placed', ACCEPTED: 'Accepted', PACKING: 'Packing', READY_FOR_PICKUP: 'Ready for pickup', DRIVER_ASSIGNED: 'Driver assigned', PICKED_UP: 'Picked up', OUT_FOR_DELIVERY: 'Out for delivery', DELIVERED: 'Delivered', CANCELED: 'Cancelled', FAILED: 'Failed' };
@@ -22,13 +23,18 @@ export default function ActivitiesScreen() {
   const router = useRouter();
   const [bookings, setBookings] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [foodOrders, setFoodOrders] = useState([]);
   const [filter, setFilter] = useState('All');
   const [expanded, setExpanded] = useState(null);
   const [loadError, setLoadError] = useState(false);
 
   useFocusEffect(useCallback(() => {
     let active = true;
-    Promise.allSettled([AsyncStorage.getItem('@unigo_home_spa_demo_bookings'), loadDemo()]).then(([bookingResult, orderResult]) => {
+    Promise.allSettled([
+      AsyncStorage.getItem('@unigo_home_spa_demo_bookings'),
+      loadDemo(),
+      getFoodOrders(),
+    ]).then(([bookingResult, orderResult, foodResult]) => {
       if (!active) return;
       let failed = false;
       try {
@@ -39,6 +45,7 @@ export default function ActivitiesScreen() {
       } catch { failed = true; }
       if (orderResult.status === 'fulfilled' && Array.isArray(orderResult.value.orders)) setOrders(orderResult.value.orders);
       else failed = true;
+      if (foodResult.status === 'fulfilled' && Array.isArray(foodResult.value)) setFoodOrders(foodResult.value);
       setLoadError(failed);
     });
     return () => { active = false; };
@@ -48,30 +55,72 @@ export default function ActivitiesScreen() {
     return rides.find(item => ['searching', 'requested', 'assigned', 'arrived', 'in_progress'].includes(item.status));
   }, [rides]);
 
+  const activeFoodOrder = useMemo(() => {
+    return foodOrders.find(item => ['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY'].includes(item.status));
+  }, [foodOrders]);
+
   const activities = useMemo(() => [
     ...rides.filter(item => SUCCESSFUL_RIDE_STATUSES.includes(item.status)).map(item => ({ ...item, type: 'Rides' })),
+    ...foodOrders.map(item => ({ ...item, type: 'Food' })),
     ...orders.map(item => ({ ...item, type: 'Shop' })),
     ...bookings.map(item => ({ ...item, type: 'Home & Spa' })),
-  ].sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)), [rides, orders, bookings]);
+  ].sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)), [rides, foodOrders, orders, bookings]);
   const visible = filter === 'All' ? activities : activities.filter(item => item.type === filter);
 
   const renderItem = ({ item }) => {
     const ride = item.type === 'Rides';
+    const food = item.type === 'Food';
     const shop = item.type === 'Shop';
     const open = expanded === `${item.type}:${item.id}`;
-    const title = ride ? (item.vehicleName || 'UniGo Ride') : shop ? (item.shopName || 'Shop order') : (item.service || 'Home & Spa booking');
-    const subtitle = ride ? `${item.origin || 'Pickup'} → ${item.destination || 'Destination'}` : shop ? (item.lines || []).map(line => `${line.quantity} × ${line.name}`).join(', ') : `${item.provider || 'Provider'} · ${item.date || ''} ${item.time || ''}`;
-    const status = ride ? (RIDE_STATUS[item.status] || item.status || 'Ride') : shop ? (SHOP_STATUS[item.status] || item.status || 'Order placed') : 'Simulated booking';
-    const amount = ride ? (item.fare != null ? `₹${item.fare}` : 'Fare unavailable') : shop ? (item.total != null ? money(item.total) : 'Total unavailable') : (item.price != null ? `₹${item.price}` : 'Price unavailable');
-    return <TouchableOpacity style={styles.card} accessibilityRole="button" accessibilityLabel={`${title}, ${status}, view details`} onPress={() => ride ? router.push({ pathname: '/(rider)/trip', params: { id: item.id } }) : setExpanded(open ? null : `${item.type}:${item.id}`)} activeOpacity={0.8}>
+    const title = ride ? (item.vehicleName || 'UniGo Ride') : food ? (item.restaurantName || 'Food Order') : shop ? (item.shopName || 'Shop order') : (item.service || 'Home & Spa booking');
+    const subtitle = ride
+      ? `${item.origin || 'Pickup'} → ${item.destination || 'Destination'}`
+      : food
+      ? (item.items || []).map(line => `${line.quantity} × ${line.name}`).join(', ')
+      : shop
+      ? (item.lines || []).map(line => `${line.quantity} × ${line.name}`).join(', ')
+      : `${item.provider || 'Provider'} · ${item.date || ''} ${item.time || ''}`;
+    const status = ride
+      ? (RIDE_STATUS[item.status] || item.status || 'Ride')
+      : food
+      ? (item.status === 'CONFIRMED' ? 'Confirmed' : item.status === 'PREPARING' ? 'Cooking' : item.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : item.status === 'DELIVERED' ? 'Delivered' : item.status === 'CANCELLED' ? 'Cancelled' : item.status)
+      : shop
+      ? (SHOP_STATUS[item.status] || item.status || 'Order placed')
+      : 'Simulated booking';
+    const amount = ride
+      ? (item.fare != null ? `₹${item.fare}` : 'Fare unavailable')
+      : food
+      ? (item.total != null ? `₹${Number(item.total).toFixed(2)}` : 'Total unavailable')
+      : shop
+      ? (item.total != null ? money(item.total) : 'Total unavailable')
+      : (item.price != null ? `₹${item.price}` : 'Price unavailable');
+
+    const handlePress = () => {
+      if (ride) router.push({ pathname: '/(rider)/trip', params: { id: item.id } });
+      else if (food) router.push({ pathname: '/(rider)/food-order', params: { id: item.id } });
+      else setExpanded(open ? null : `${item.type}:${item.id}`);
+    };
+
+    return <TouchableOpacity style={styles.card} accessibilityRole="button" accessibilityLabel={`${title}, ${status}, view details`} onPress={handlePress} activeOpacity={0.8}>
       <View style={styles.row}>
-        <View style={styles.icon}><Ionicons name={ride ? 'car-outline' : shop ? 'basket-outline' : 'sparkles-outline'} size={22} color="#08754e" /></View>
+        <View style={[styles.icon, food && { backgroundColor: '#FFF0E5' }]}>
+          <Ionicons
+            name={ride ? 'car-outline' : food ? 'restaurant-outline' : shop ? 'basket-outline' : 'sparkles-outline'}
+            size={22}
+            color={food ? '#B85A23' : '#08754e'}
+          />
+        </View>
         <View style={styles.main}><Text style={styles.title} numberOfLines={1}>{title}</Text><Text style={styles.date}>{dateLabel(item.createdAt)}</Text></View>
         <Text style={styles.amount}>{amount}</Text>
       </View>
       <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
-      <View style={styles.bottom}><Text style={styles.status}>{status}{!ride || item.simulated ? ' · Simulation' : ''}</Text><Text style={styles.details}>{open ? 'Hide details' : 'View details'}  ›</Text></View>
-      {open && !ride && <View style={styles.expanded}>
+      <View style={styles.bottom}>
+        <Text style={[styles.status, food && { color: item.status === 'DELIVERED' ? '#08754e' : '#B85A23' }]}>
+          {status}{!ride && !food ? ' · Simulation' : ''}
+        </Text>
+        <Text style={styles.details}>{ride || food ? 'Track order ›' : open ? 'Hide details ›' : 'View details ›'}</Text>
+      </View>
+      {open && !ride && !food && <View style={styles.expanded}>
         {shop ? <>
           <Text style={styles.detail}>Delivery: {[item.address?.addressLine, item.address?.area].filter(Boolean).join(', ') || 'Not available'}</Text>
           {(item.lines || []).map((line, index) => <Text key={`${line.id || line.name}-${index}`} style={styles.detail}>{line.quantity} × {line.name} {line.price != null ? `· ${money(line.price * line.quantity)}` : ''}</Text>)}
@@ -102,6 +151,22 @@ export default function ActivitiesScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.activeTitle}>Active Ride in Progress</Text>
           <Text style={styles.activeRoute} numberOfLines={1}>{activeRide.origin} → {activeRide.destination}</Text>
+        </View>
+        <Text style={styles.activeAction}>Track ›</Text>
+      </TouchableOpacity>
+    )}
+    {activeFoodOrder && (filter === 'All' || filter === 'Food') && (
+      <TouchableOpacity
+        style={[styles.activeRideCard, { backgroundColor: '#B85A23' }]}
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/(rider)/food-order', params: { id: activeFoodOrder.id } })}
+      >
+        <View style={styles.activeIcon}>
+          <Ionicons name="restaurant" size={18} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.activeTitle}>Active Food Order · {activeFoodOrder.status === 'CONFIRMED' ? 'Confirmed' : activeFoodOrder.status === 'PREPARING' ? 'Cooking' : 'Out for Delivery'}</Text>
+          <Text style={styles.activeRoute} numberOfLines={1}>{activeFoodOrder.restaurantName} · ₹{Number(activeFoodOrder.total).toFixed(2)}</Text>
         </View>
         <Text style={styles.activeAction}>Track ›</Text>
       </TouchableOpacity>

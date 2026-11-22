@@ -21,6 +21,7 @@ export default function RiderLayout() {
       <Stack.Screen name="food" options={{ headerShown: false }} />
       <Stack.Screen name="restaurant" options={{ headerShown: false }} />
       <Stack.Screen name="cart" options={{ headerShown: false }} />
+      <Stack.Screen name="food-order" options={{ headerShown: false }} />
       <Stack.Screen name="box" options={{ headerShown: false }} />
       <Stack.Screen name="homespa" options={{ headerShown: false }} />
     </Stack>
