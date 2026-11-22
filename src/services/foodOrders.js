@@ -66,3 +66,4 @@ export async function updateFoodOrder(id, changes) {
     return null;
   }
 }
+
