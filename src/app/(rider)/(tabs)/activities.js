@@ -8,6 +8,7 @@ import { useActivity } from '../../../context/ActivityProvider';
 import { loadDemo, money } from '../../../services/shopDemo';
 
 const FILTERS = ['All', 'Rides', 'Shop', 'Home & Spa'];
+const SUCCESSFUL_RIDE_STATUSES = ['completed', 'payment_pending', 'paid', 'rated'];
 const RIDE_STATUS = { searching: 'Finding driver', requested: 'Awaiting driver', unavailable: 'No driver available', assigned: 'Driver assigned', arrived: 'Driver arrived', in_progress: 'In progress', completed: 'Completed', payment_pending: 'Payment due', paid: 'Paid', rated: 'Completed', cancelled: 'Cancelled', confirmed: 'Confirmed' };
 const SHOP_STATUS = { PLACED: 'Order placed', ACCEPTED: 'Accepted', PACKING: 'Packing', READY_FOR_PICKUP: 'Ready for pickup', DRIVER_ASSIGNED: 'Driver assigned', PICKED_UP: 'Picked up', OUT_FOR_DELIVERY: 'Out for delivery', DELIVERED: 'Delivered', CANCELED: 'Cancelled', FAILED: 'Failed' };
 
@@ -43,8 +44,12 @@ export default function ActivitiesScreen() {
     return () => { active = false; };
   }, []));
 
+  const activeRide = useMemo(() => {
+    return rides.find(item => ['searching', 'requested', 'assigned', 'arrived', 'in_progress'].includes(item.status));
+  }, [rides]);
+
   const activities = useMemo(() => [
-    ...rides.map(item => ({ ...item, type: 'Rides' })),
+    ...rides.filter(item => SUCCESSFUL_RIDE_STATUSES.includes(item.status)).map(item => ({ ...item, type: 'Rides' })),
     ...orders.map(item => ({ ...item, type: 'Shop' })),
     ...bookings.map(item => ({ ...item, type: 'Home & Spa' })),
   ].sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)), [rides, orders, bookings]);
@@ -85,6 +90,22 @@ export default function ActivitiesScreen() {
   return <SafeAreaView style={styles.container} edges={['top']}>
     <View style={styles.header}><Text style={styles.heading}>Activity</Text><Text style={styles.headerSub}>Your rides, orders and bookings</Text></View>
     <View style={styles.filters}>{FILTERS.map(option => <TouchableOpacity key={option} onPress={() => setFilter(option)} accessibilityRole="button" accessibilityState={{ selected: filter === option }} style={[styles.filter, filter === option && styles.filterActive]}><Text style={[styles.filterText, filter === option && styles.filterTextActive]}>{option}</Text></TouchableOpacity>)}</View>
+    {activeRide && (filter === 'All' || filter === 'Rides') && (
+      <TouchableOpacity
+        style={styles.activeRideCard}
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/(rider)/trip', params: { id: activeRide.id } })}
+      >
+        <View style={styles.activeIcon}>
+          <Ionicons name="navigate" size={18} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.activeTitle}>Active Ride in Progress</Text>
+          <Text style={styles.activeRoute} numberOfLines={1}>{activeRide.origin} → {activeRide.destination}</Text>
+        </View>
+        <Text style={styles.activeAction}>Track ›</Text>
+      </TouchableOpacity>
+    )}
     {loadError && <Text style={styles.error}>Some activities could not be loaded. Reopen this screen to try again.</Text>}
     <FlatList data={visible} keyExtractor={item => `${item.type}:${item.id}`} renderItem={renderItem} contentContainerStyle={visible.length ? styles.list : styles.emptyList} showsVerticalScrollIndicator={false} ListEmptyComponent={<View style={styles.empty}><Ionicons name="receipt-outline" size={38} color="#08754e" /><Text style={styles.emptyTitle}>{!isLoaded ? 'Loading activity…' : filter === 'All' ? 'No activity yet' : `No ${filter.toLowerCase()} yet`}</Text><Text style={styles.emptyText}>Your activity will appear here when you make a booking or order.</Text></View>} />
   </SafeAreaView>;
@@ -117,6 +138,11 @@ const styles = StyleSheet.create({
   detail: { color: '#40564a', fontSize: 13, lineHeight: 19 },
   note: { color: '#78877e', fontSize: 12, lineHeight: 18, marginTop: 4 },
   error: { color: '#a24032', paddingHorizontal: 18, paddingBottom: 10, fontSize: 12 },
+  activeRideCard: { marginHorizontal: 16, marginBottom: 12, backgroundColor: '#0f7a56', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6 },
+  activeIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  activeTitle: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  activeRoute: { color: '#d1fae5', fontSize: 12, marginTop: 2 },
+  activeAction: { color: '#fff', fontSize: 13, fontWeight: '800', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 35 },
   emptyTitle: { color: '#193a2c', fontSize: 18, fontWeight: '800', marginTop: 12 },
   emptyText: { color: '#78877e', textAlign: 'center', lineHeight: 20, marginTop: 6 },

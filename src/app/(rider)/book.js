@@ -242,13 +242,26 @@ export default function BookScreen() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const results = await searchLocations(text, origin);
-        if (requestId === searchRequestRef.current) setSearchResults(results);
+        if (requestId === searchRequestRef.current) {
+          setSearchResults(results);
+          if (results.length > 0) setSearchError(false);
+        }
       } catch {
-        if (requestId === searchRequestRef.current) setSearchError(true);
+        if (requestId === searchRequestRef.current) {
+          try {
+            const devResults = await searchOnDevice(text, selectedCity?.name);
+            if (devResults && devResults.length > 0) {
+              setSearchResults(devResults);
+              setSearchError(false);
+              return;
+            }
+          } catch {}
+          setSearchError(true);
+        }
       } finally {
         if (requestId === searchRequestRef.current) setIsSearching(false);
       }
-    }, 800);
+    }, 400);
   };
 
   const handleDeviceSearch = async () => {
@@ -874,7 +887,7 @@ export default function BookScreen() {
               ))}
               {!!deviceSearchMessage && <Text style={styles.searchEmpty}>{deviceSearchMessage}</Text>}
               {isSearching && <Text style={styles.searchEmpty}>Searching places…</Text>}
-              {!isSearching && searchError && <View><Text style={styles.searchEmpty}>Online search is unavailable. Check your connection or select a saved place.</Text><TouchableOpacity style={styles.resultItem} accessibilityRole="button" onPress={() => handleSearchChange(activeSearchField === 'pickup' ? pickupQuery : dropQuery, activeSearchField)}><Text style={styles.resultTitle}>Retry search</Text></TouchableOpacity>{Platform.OS !== 'web' && <TouchableOpacity style={styles.resultItem} accessibilityRole="button" onPress={handleDeviceSearch}><Text style={styles.resultTitle}>Search on this device</Text></TouchableOpacity>}</View>}
+              {!isSearching && searchError && !searchResults.length && !matchingSavedPlaces.length && <View><Text style={styles.searchEmpty}>Online search is unavailable. Check your connection or select a saved place.</Text><TouchableOpacity style={styles.resultItem} accessibilityRole="button" onPress={() => handleSearchChange(activeSearchField === 'pickup' ? pickupQuery : dropQuery, activeSearchField)}><Text style={styles.resultTitle}>Retry search</Text></TouchableOpacity>{Platform.OS !== 'web' && <TouchableOpacity style={styles.resultItem} accessibilityRole="button" onPress={handleDeviceSearch}><Text style={styles.resultTitle}>Search on this device</Text></TouchableOpacity>}</View>}
               {!isSearching && !searchError && !searchResults.length && !matchingSavedPlaces.length && <Text style={styles.searchEmpty}>No places found. Try another area or add the city name.</Text>}
             </ScrollView>
             <Text style={styles.searchAttribution}>Location data © OpenStreetMap contributors</Text>

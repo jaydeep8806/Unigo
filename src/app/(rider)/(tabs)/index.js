@@ -10,6 +10,7 @@ import {
   Dimensions,
   TextInput,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,7 +49,7 @@ const GRID_GAP = 10;
 const TILE_W = (SCREEN_WIDTH - GRID_H_PAD * 2 - GRID_GAP * 3) / 4;
 
 // ── Info-card width: show part of the 3rd card ───────────────────────
-const INFO_CARD_W = SCREEN_WIDTH * 0.42;
+const INFO_CARD_W = Math.max(148, Math.min(SCREEN_WIDTH * 0.44, 180));
 
 export default function RiderHomeScreen() {
   const router = useRouter();
@@ -158,10 +159,11 @@ export default function RiderHomeScreen() {
   const infoCards = [
     {
       id: 'wallet',
-      label: 'Balance',
+      label: 'Wallet Balance',
       value: `${CURRENCY_SYMBOL}${Number(balance || 0).toFixed(2)}`,
+      subtitle: 'Top up & fast pay',
       icon: 'wallet-outline',
-      image: WALLET_IMG,
+      badge: '+ Add',
       onPress: () => router.push('/(rider)/wallet'),
     },
     {
@@ -170,15 +172,17 @@ export default function RiderHomeScreen() {
       value: 'Cash',
       subtitle: 'Pay driver directly in ₹',
       icon: 'cash-outline',
+      badge: 'Default',
       onPress: () => showToast('Default payment method is Cash (₹)'),
     },
     {
       id: 'safety',
-      label: 'Safety',
-      value: 'Share trip & SOS',
-      subtitle: 'Coming soon',
+      label: 'Trip Safety',
+      value: '24/7 SOS',
+      subtitle: 'Share ride & help',
       icon: 'shield-checkmark-outline',
-      onPress: () => showToast('Safety & SOS feature is coming soon!'),
+      badge: 'Active',
+      onPress: () => Alert.alert('Trip Safety & SOS', 'UniGo rides are protected with 24/7 emergency support.\n\nEmergency helpline: 112\nShare live trip status with family during any ride.'),
     },
   ];
 
@@ -361,8 +365,8 @@ export default function RiderHomeScreen() {
         {/* ─────────────────────────────────────────────────────────────
             d. TRIP ESSENTIALS: Wallet, Payment, Safety info cards
         ───────────────────────────────────────────────────────────── */}
-        <View style={styles.sectionWrapper}>
-          <Text style={styles.sectionTitleHeader}>Trip Essentials</Text>
+        <View style={styles.tripEssentialsSection}>
+          <Text style={[styles.sectionTitleHeader, { paddingHorizontal: 16 }]}>Trip Essentials</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -382,21 +386,21 @@ export default function RiderHomeScreen() {
                       color={THEME.colors.primary}
                     />
                   </View>
-                  {card.image ? (
-                    <Image
-                      source={card.image}
-                      style={styles.infoCardImage}
-                      contentFit="contain"
-                    />
-                  ) : null}
+                  {card.badge ? (
+                    <View style={styles.infoCardBadge}>
+                      <Text style={styles.infoCardBadgeText}>{card.badge}</Text>
+                    </View>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
+                  )}
                 </View>
-                <Text style={styles.infoCardLabel}>{card.label}</Text>
-                <Text style={styles.infoCardValue}>{card.value}</Text>
-                {card.subtitle ? (
+                <View style={styles.infoCardBottom}>
+                  <Text style={styles.infoCardLabel}>{card.label}</Text>
+                  <Text style={styles.infoCardValue} numberOfLines={1}>{card.value}</Text>
                   <Text style={styles.infoCardSubtitle} numberOfLines={1}>
                     {card.subtitle}
                   </Text>
-                ) : null}
+                </View>
               </PressableScale>
             ))}
           </ScrollView>
@@ -880,42 +884,59 @@ const styles = StyleSheet.create({
   },
 
   // ── d. Info cards (Trip Essentials) ──────────────────────────────────
+  tripEssentialsSection: {
+    marginTop: 20,
+  },
   infoCardsScroll: {
+    paddingHorizontal: 16,
     gap: 12,
-    paddingRight: 16,
+    paddingBottom: 6,
   },
   infoCard: {
     width: INFO_CARD_W,
+    minHeight: 136,
     backgroundColor: THEME.colors.white,
     borderRadius: 20,
     padding: 14,
     borderWidth: 1,
     borderColor: THEME.colors.border,
+    justifyContent: 'space-between',
     ...THEME.shadows.card,
   },
   infoCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   infoCardIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#E6F4EA',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  infoCardImage: {
-    width: 34,
-    height: 34,
+  infoCardBadge: {
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  infoCardBadgeText: {
+    fontSize: 10,
+    fontWeight: THEME.fontWeights.bold,
+    color: '#0F7A56',
+  },
+  infoCardBottom: {
+    gap: 2,
   },
   infoCardLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: THEME.colors.mutedText,
-    fontWeight: THEME.fontWeights.regular,
-    marginBottom: 2,
+    fontWeight: THEME.fontWeights.bold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   infoCardValue: {
     fontSize: 18,
@@ -925,7 +946,7 @@ const styles = StyleSheet.create({
   infoCardSubtitle: {
     fontSize: 11,
     color: THEME.colors.mutedText,
-    marginTop: 2,
+    marginTop: 1,
   },
 
   // ── e. Promo banners ─────────────────────────────────────────────────

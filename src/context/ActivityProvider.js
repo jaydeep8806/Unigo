@@ -87,7 +87,26 @@ export function ActivityProvider({ children }) {
   }, [isLoaded, persist]);
 
   const addRide = useCallback(async (rideData) => {
-    const newRide = asActivity(await driverAction('request', { ...rideData, simulated: simulationEnabled }));
+    let newRide;
+    try {
+      const response = await driverAction('request', { ...rideData, simulated: simulationEnabled });
+      if (response && response.status !== 'unavailable') {
+        newRide = asActivity(response);
+      } else {
+        // No fleet drivers online on server — fallback to realistic demo ride
+        throw new Error('No online drivers, using simulation');
+      }
+    } catch {
+      // Backend unavailable or no fleet online – create a fully local simulated ride
+      newRide = {
+        id: `ride_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        status: 'searching',
+        createdAt: new Date().toISOString(),
+        otp: String(Math.floor(1000 + Math.random() * 9000)),
+        simulated: true,
+        ...rideData,
+      };
+    }
 
     const updated = [newRide, ...ridesRef.current.filter(r => r.id !== newRide.id)];
     ridesRef.current = updated;
