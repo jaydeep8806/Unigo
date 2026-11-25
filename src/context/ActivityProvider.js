@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 import { asActivity, driverAction, simulationEnabled, watchRides } from '../services/drivers';
 import { supabase } from '../lib/supabase';
 
@@ -37,6 +38,12 @@ export function ActivityProvider({ children }) {
     return () => { mounted = false; };
   }, []);
 
+  const notifyCompleted = useCallback((previous, next) => {
+    if (previous && !['completed', 'payment_pending', 'paid', 'rated'].includes(previous.status) && next.status === 'completed') {
+      Alert.alert('Service completed', 'Your ride has been completed.');
+    }
+  }, []);
+
   const persist = useCallback(async (newRides) => {
     try {
       await AsyncStorage.setItem(STORAGE_KEY_RIDES, JSON.stringify(newRides));
@@ -70,6 +77,7 @@ export function ActivityProvider({ children }) {
           const merged = rows.map(row => {
             const old = ridesRef.current.find(r => r.id === row.id);
             const next = { ...old, ...asActivity(row) };
+            notifyCompleted(old, next);
             if (row.status === 'completed' && ['payment_pending','paid','rated'].includes(old?.status)) next.status = old.status;
             return next;
           });
@@ -84,7 +92,7 @@ export function ActivityProvider({ children }) {
     supabase.auth.getSession().then(({ data }) => attach(data.session));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => { setTimeout(() => { if (!disposed) attach(session); }, 0); });
     return () => { disposed = true; stop(); listener.subscription.unsubscribe(); };
-  }, [isLoaded, persist]);
+  }, [isLoaded, persist, notifyCompleted]);
 
   const addRide = useCallback(async (rideData) => {
     let newRide;
@@ -116,11 +124,13 @@ export function ActivityProvider({ children }) {
   }, [persist]);
 
   const updateRide = useCallback(async (rideId, changes) => {
+    const previous = ridesRef.current.find((ride) => ride.id === rideId);
+    if (previous) notifyCompleted(previous, { ...previous, ...changes });
     const updated = ridesRef.current.map((ride) => ride.id === rideId ? { ...ride, ...changes } : ride);
     ridesRef.current = updated;
     setRides(updated);
     await persist(updated);
-  }, [persist]);
+  }, [persist, notifyCompleted]);
 
   const cancelRide = useCallback(async (rideId) => {
     if (ridesRef.current.find(r => r.id === rideId)?.backend) await driverAction('cancel', { id: rideId });

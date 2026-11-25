@@ -51,12 +51,15 @@ export default function AuthForm({ signup = false, compact = false, dense = fals
         if (result.type === 'success') {
           const url = new URL(result.url);
           const params = new URLSearchParams(url.hash.substring(1));
-          const access_token = params.get('access_token');
-          const refresh_token = params.get('refresh_token');
-          const authError = params.get('error_description') || url.searchParams.get('error_description');
+          const access_token = params.get('access_token') || url.searchParams.get('access_token');
+          const refresh_token = params.get('refresh_token') || url.searchParams.get('refresh_token');
+          const authError = params.get('error_description') || url.searchParams.get('error_description') || params.get('error') || url.searchParams.get('error');
           if (authError) throw new Error(authError);
-          if (!access_token || !refresh_token) throw new Error('Google sign-in could not be completed. Please try again.');
-          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+          const code = url.searchParams.get('code');
+          if (!code && (!access_token || !refresh_token)) throw new Error('Google sign-in could not be completed. Check the sign-in redirect configuration and try again.');
+          const { data: sessionData, error: sessionError } = code
+            ? await supabase.auth.exchangeCodeForSession(code)
+            : await supabase.auth.setSession({ access_token, refresh_token });
           if (sessionError) throw sessionError;
           if (sessionData.session) onSignedIn?.(sessionData.session.user);
         }

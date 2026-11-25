@@ -292,7 +292,7 @@ export default function TripScreen() {
           {/* Title + subtitle */}
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.muted}>
-            {ride.simulated ? 'Simulated ride · demo driver' : 'Connected to the UNIGO driver network'}
+            {ride.simulated ? 'Simulated ride · no human driver will arrive' : 'Connected to the UNIGO driver network'}
           </Text>
 
           {/* Route summary */}

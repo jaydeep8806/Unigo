@@ -86,7 +86,7 @@ export default function ActivitiesScreen() {
       ? (item.status === 'CONFIRMED' ? 'Confirmed' : item.status === 'PREPARING' ? 'Cooking' : item.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : item.status === 'DELIVERED' ? 'Delivered' : item.status === 'CANCELLED' ? 'Cancelled' : item.status)
       : shop
       ? (SHOP_STATUS[item.status] || item.status || 'Order placed')
-      : 'Simulated booking';
+      : 'Saved booking';
     const amount = ride
       ? (item.fare != null ? `₹${item.fare}` : 'Fare unavailable')
       : food
@@ -116,7 +116,7 @@ export default function ActivitiesScreen() {
       <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
       <View style={styles.bottom}>
         <Text style={[styles.status, food && { color: item.status === 'DELIVERED' ? '#08754e' : '#B85A23' }]}>
-          {status}{!ride && !food ? ' · Simulation' : ''}
+          {status}{shop ? ' · Simulation' : ''}
         </Text>
         <Text style={styles.details}>{ride || food ? 'Track order ›' : open ? 'Hide details ›' : 'View details ›'}</Text>
       </View>
@@ -130,7 +130,8 @@ export default function ActivitiesScreen() {
           <Text style={styles.detail}>Provider: {item.provider || 'Not available'}</Text>
           <Text style={styles.detail}>Appointment: {item.date || 'Date unavailable'} {item.time || ''}</Text>
           <Text style={styles.detail}>Location: {item.address || 'Not available'}</Text>
-          <Text style={styles.note}>Simulation only. No provider was contacted or payment taken.</Text>
+          {item.paymentMethod && <Text style={styles.detail}>Payment preference: {item.paymentLabel || 'Pay at service'}</Text>}
+          <Text style={styles.note}>Saved on this device. No provider was contacted or payment taken.</Text>
         </>}
       </View>}
     </TouchableOpacity>;

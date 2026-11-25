@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useLocation } from '../../../context/LocationProvider';
 import { useWallet } from '../../../context/WalletProvider';
+import { useActivity } from '../../../context/ActivityProvider';
 import { CITIES, CURRENCY_SYMBOL } from '../../../constants/config';
 import { THEME } from '../../../constants/theme';
 import PressableScale from '../../../components/PressableScale';
@@ -56,6 +58,24 @@ export default function RiderHomeScreen() {
   const insets = useSafeAreaInsets();
   const { selectedCity, setCity, selectManualLocation } = useLocation();
   const { balance } = useWallet();
+  const { rides } = useActivity();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [readRideIds, setReadRideIds] = useState([]);
+  const completedRides = rides.filter((ride) => ['completed', 'payment_pending', 'paid', 'rated'].includes(ride.status));
+  const hasUnreadNotifications = completedRides.some((ride) => !readRideIds.includes(ride.id));
+
+  useEffect(() => {
+    AsyncStorage.getItem('@unigo_read_ride_notifications').then((value) => {
+      if (value) { const ids = JSON.parse(value); if (Array.isArray(ids)) setReadRideIds(ids); }
+    }).catch(() => {});
+  }, []);
+
+  const openNotifications = () => {
+    setNotificationsOpen(true);
+    const ids = [...new Set([...readRideIds, ...completedRides.map((ride) => ride.id)])];
+    setReadRideIds(ids);
+    AsyncStorage.setItem('@unigo_read_ride_notifications', JSON.stringify(ids)).catch(() => {});
+  };
 
   const [cityModalVisible, setCityModalVisible] = useState(false);
   const [locationQuery, setLocationQuery] = useState('');
@@ -279,15 +299,28 @@ export default function RiderHomeScreen() {
             {/* Notification Bell Button */}
             <PressableScale
               style={styles.bellButton}
-              onPress={() => showToast('No new notifications')}
+              onPress={openNotifications}
               accessibilityLabel="Notifications"
             >
               <Ionicons name="notifications-outline" size={21} color="#FFFFFF" />
-              <View style={styles.bellBadgeDot} />
+              {hasUnreadNotifications && <View style={styles.bellBadgeDot} />}
             </PressableScale>
           </View>
 
-          {/* Unified Super App Search Bar */}
+          <Modal visible={notificationsOpen} animationType="slide" onRequestClose={() => setNotificationsOpen(false)}>
+        <View style={{ flex: 1, paddingTop: insets.top + 16, paddingHorizontal: 20, backgroundColor: '#f7faf8' }}>
+          <Pressable onPress={() => setNotificationsOpen(false)} accessibilityRole="button" accessibilityLabel="Close notifications"><Text style={{ color: '#08754e', fontSize: 16, fontWeight: '700' }}>← Back</Text></Pressable>
+          <Text style={{ fontSize: 26, fontWeight: '800', color: '#173a2c', marginVertical: 20 }}>Notifications</Text>
+          <FlatList data={completedRides} keyExtractor={(ride) => String(ride.id)} renderItem={({ item }) => (
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10 }}>
+              <Text style={{ color: '#173a2c', fontSize: 16, fontWeight: '800' }}>Service completed</Text>
+              <Text style={{ color: '#526a5e', marginTop: 6 }}>Your {item.vehicleName || 'ride'} has been completed.</Text>
+            </View>
+          )} ListEmptyComponent={<Text style={{ color: '#526a5e' }}>No notifications yet.</Text>} />
+        </View>
+      </Modal>
+
+      {/* Unified Super App Search Bar */}
           <PressableScale
             style={styles.searchBar}
             onPress={() => router.push('/(rider)/book')}

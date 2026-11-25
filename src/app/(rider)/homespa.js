@@ -9,6 +9,8 @@ import { useLocation } from '../../context/LocationProvider';
 import { DEFAULT_CITY } from '../../constants/config';
 import { THEME } from '../../constants/theme';
 import LeafletMap from '../../components/LeafletMap';
+import BookingSuccess from '../../components/BookingSuccess';
+import { PAYMENT_OPTIONS, paymentLabel } from '../../components/commerce/DemoPayment';
 import { reverseGeocode } from '../../services/geocoding';
 import { demoHomeSpaPlaces, findHomeSpaPlaces } from '../../services/homeSpa';
 
@@ -18,6 +20,7 @@ const SERVICES = [
   { id: 'spa', label: 'Spa', icon: 'water', description: 'Wellness and spa treatments', options: ['Spa treatment', 'Body scrub', 'Aromatherapy', 'Foot spa'] },
   { id: 'massage', label: 'Massage', icon: 'body', description: 'Massage and relaxation', options: ['Full body massage', 'Head massage', 'Back massage', 'Foot massage'] },
 ];
+const PAYMENT_COLORS = { upi: ['#EEF2FF', '#4F46A5'], card: ['#FFF1E8', '#B45332'], bank: ['#EAF4FF', '#2563A6'], wallet: ['#F7EDFA', '#9147A3'], cod: ['#FFF7DF', '#9A6700'] };
 const DEMO_PRICES = { 'Home deep cleaning': 1499, 'Bathroom cleaning': 499, 'Kitchen cleaning': 699, 'Sofa cleaning': 799, Laundry: 299, Haircut: 299, Facial: 699, 'Manicure and pedicure': 599, Waxing: 499, 'Hair styling': 399, 'Spa treatment': 1199, 'Body scrub': 899, Aromatherapy: 999, 'Foot spa': 599, 'Full body massage': 1299, 'Head massage': 399, 'Back massage': 699, 'Foot massage': 499 };
 
 export default function HomeSpaScreen() {
@@ -37,9 +40,17 @@ export default function HomeSpaScreen() {
   const [loading, setLoading] = useState(false);
   const [places, setPlaces] = useState([]);
   const [message, setMessage] = useState('');
-  const [selectedOption, setSelectedOption] = useState('');
+  const [selectedOptions, setSelectedOptions] = useState([]);
+  const [bookingStage, setBookingStage] = useState('details');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentProvider, setPaymentProvider] = useState('');
+  const paymentOption = PAYMENT_OPTIONS.find((option) => option.id === paymentMethod);
+  const paymentReady = !!paymentMethod && (!paymentOption?.providers || !!paymentProvider);
+  const total = selectedOptions.reduce((sum, option) => sum + DEMO_PRICES[option], 0);
+  const toggleOption = (option) => setSelectedOptions((current) => current.includes(option) ? current.filter((item) => item !== option) : [...current, option]);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingSaved, setBookingSaved] = useState(false);
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('');
   const [bookingMessage, setBookingMessage] = useState('');
@@ -119,16 +130,15 @@ export default function HomeSpaScreen() {
     return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
   }), []);
   const saveDemoBooking = async () => {
-    if (!selectedOption || !bookingDate || !bookingTime || saving) return;
+    if (!selectedOptions.length || !bookingDate || !bookingTime || !paymentReady || saving) return;
     setSaving(true);
     try {
       const key = '@unigo_home_spa_demo_bookings';
       const existing = JSON.parse(await AsyncStorage.getItem(key) || '[]');
-      await AsyncStorage.setItem(key, JSON.stringify([{ id: `demo-${Date.now()}`, provider: selectedPlace.name, service: selectedOption, date: bookingDate, time: bookingTime, address, coordinates: center, price: DEMO_PRICES[selectedOption], createdAt: new Date().toISOString() }, ...existing]));
-      setBookingOpen(false);
-      router.replace('/(rider)/(tabs)/activities');
+      await AsyncStorage.setItem(key, JSON.stringify([{ id: `demo-${Date.now()}`, provider: selectedPlace.name, service: selectedOptions.join(', '), services: selectedOptions, date: bookingDate, time: bookingTime, address, coordinates: center, price: total, paymentMethod, paymentLabel: paymentMethod === 'cod' ? 'Pay at service' : paymentLabel(paymentMethod, paymentProvider), createdAt: new Date().toISOString() }, ...existing]));
+      setBookingSaved(true);
     } catch {
-      setBookingMessage('Could not save the simulated booking. Please try again.');
+      setBookingMessage('Could not save the booking. Please try again.');
     } finally { setSaving(false); }
   };
   const changeStep = (next) => {
@@ -150,7 +160,7 @@ export default function HomeSpaScreen() {
           <Text style={styles.heading}>What service do you need?</Text>
           <Text style={styles.intro}>Choose a category to find nearby businesses.</Text>
           {SERVICES.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.card} accessibilityRole="button" onPress={() => { setService(item); setSelectedOption(''); setStep('location'); locateMe(); }}>
+            <TouchableOpacity key={item.id} style={styles.card} accessibilityRole="button" onPress={() => { setService(item); setSelectedOptions([]); setStep('location'); locateMe(); }}>
               <View style={styles.icon}><Ionicons name={item.icon} size={24} color={THEME.colors.primaryDark} /></View>
               <View style={styles.grow}><Text style={styles.cardTitle}>{item.label}</Text><Text style={styles.subtle}>{item.description}</Text></View>
               <Ionicons name="chevron-forward" size={20} color={THEME.colors.mutedText} />
@@ -172,17 +182,17 @@ export default function HomeSpaScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.heading}>{service.label} near you</Text>
           <Text style={styles.intro}>{address} · within 10 km</Text>
-          <Text style={styles.cardTitle}>Choose a service</Text>
-          <Text style={styles.subtle}>Select what you need, then choose a nearby business on the map or in the list.</Text>
-          <View style={styles.options}>{service.options.map((option) => <TouchableOpacity key={option} accessibilityRole="button" accessibilityState={{ selected: selectedOption === option }} style={[styles.option, selectedOption === option && styles.optionSelected]} onPress={() => setSelectedOption(option)}><Text style={[styles.optionText, selectedOption === option && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
+          <Text style={styles.cardTitle}>Choose services</Text>
+          <Text style={styles.subtle}>Select one or more services, then choose a nearby business on the map or in the list.</Text>
+          <View style={styles.options}>{service.options.map((option) => <TouchableOpacity key={option} accessibilityRole="button" accessibilityState={{ selected: selectedOptions.includes(option) }} style={[styles.option, selectedOptions.includes(option) && styles.optionSelected]} onPress={() => toggleOption(option)}><Text style={[styles.optionText, selectedOptions.includes(option) && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
           <View style={styles.resultsMap}><LeafletMap center={center} zoom={12} markers={markers} onMarkerPress={(marker) => setSelectedPlace(marker)} /></View>
-          <Text style={styles.notice}>Example providers and their map locations are fictional. Simulated bookings are saved on this device and do not contact a provider. Live listings require direct confirmation.</Text>
+          <Text style={styles.notice}>Example providers and their map locations are fictional. Bookings are saved on this device and do not contact a provider. Live listings require direct confirmation.</Text>
           {bookingMessage ? <Text style={styles.notice}>{bookingMessage}</Text> : null}
           {selectedPlace ? <View style={styles.selectedCard}>
             <Text style={styles.cardTitle}>{selectedPlace.name}{selectedPlace.demo ? ' · Fictional' : ''}</Text>
-            <Text style={styles.subtle}>{selectedPlace.type.replace(/_/g, ' ')} · {selectedOption || service.label}</Text>
+            <Text style={styles.subtle}>{selectedPlace.type.replace(/_/g, ' ')} · {selectedOptions.length ? selectedOptions.join(', ') : service.label}</Text>
             <Text style={styles.subtle}>Service location: {address}</Text>
-            {selectedPlace.demo ? <TouchableOpacity style={styles.button} onPress={() => { setBookingDate(''); setBookingTime(''); setBookingMessage(''); setBookingOpen(true); }} accessibilityRole="button"><Text style={styles.buttonText}>Try simulated booking</Text></TouchableOpacity> : selectedPlace.phone ? <TouchableOpacity style={styles.button} onPress={() => callPlace(selectedPlace.phone)} accessibilityRole="button"><Text style={styles.buttonText}>Call to arrange booking</Text></TouchableOpacity> : <Text style={styles.empty}>No phone number is available for this listing, so a booking cannot be arranged here.</Text>}
+            {selectedPlace.demo ? <TouchableOpacity style={styles.button} onPress={() => { setBookingDate(''); setBookingTime(''); setBookingMessage(''); setBookingSaved(false); setBookingStage('details'); setPaymentMethod(''); setPaymentProvider(''); setBookingOpen(true); }} accessibilityRole="button"><Text style={styles.buttonText}>Book services</Text></TouchableOpacity> : selectedPlace.phone ? <TouchableOpacity style={styles.button} onPress={() => callPlace(selectedPlace.phone)} accessibilityRole="button"><Text style={styles.buttonText}>Call to arrange booking</Text></TouchableOpacity> : <Text style={styles.empty}>No phone number is available for this listing, so a booking cannot be arranged here.</Text>}
           </View> : null}
           <Text style={styles.cardTitle}>Nearby businesses</Text>
           {loading ? <View style={styles.loadingRow}><ActivityIndicator color={THEME.colors.primary} /><Text style={styles.subtle}> Looking for live businesses…</Text></View> : null}
@@ -199,23 +209,44 @@ export default function HomeSpaScreen() {
           <TouchableOpacity style={styles.secondary} onPress={() => changeStep('service')}><Text style={styles.secondaryText}>Choose another service</Text></TouchableOpacity>
         </ScrollView>
       )}
-      <Modal visible={bookingOpen} animationType="slide" onRequestClose={() => setBookingOpen(false)}>
+      <Modal visible={bookingOpen} animationType="slide" onRequestClose={() => { if (bookingSaved) { setBookingOpen(false); router.replace('/(rider)/(tabs)/activities'); } else setBookingOpen(false); }}>
         <SafeAreaView style={styles.screen} edges={['top', 'bottom']}><ScrollView contentContainerStyle={styles.content}>
           <TouchableOpacity onPress={() => setBookingOpen(false)} accessibilityRole="button"><Text style={styles.secondaryText}>← Back</Text></TouchableOpacity>
-          <Text style={styles.heading}>Try a simulated booking</Text>
-          <Text style={styles.notice}>This is a simulation. No appointment is sent to a provider and no payment is taken.</Text>
+          <Text style={styles.heading}>{bookingStage === 'details' ? 'Confirm booking' : 'Payment'}</Text>
+          <Text style={styles.notice}>This example is saved on your device. No appointment is sent to a provider and no payment is collected.</Text>
           <Text style={styles.cardTitle}>{selectedPlace?.name} · Fictional</Text>
           <Text style={styles.subtle}>Service location: {address}</Text>
-          <Text style={styles.cardTitle}>Choose a service</Text>
-          <View style={styles.options}>{service?.options.map((option) => <TouchableOpacity key={option} onPress={() => setSelectedOption(option)} style={[styles.option, selectedOption === option && styles.optionSelected]}><Text style={[styles.optionText, selectedOption === option && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
+          {bookingStage === 'details' ? <>
+          <Text style={styles.cardTitle}>Choose services</Text>
+          <View style={styles.options}>{service?.options.map((option) => <TouchableOpacity key={option} onPress={() => toggleOption(option)} style={[styles.option, selectedOptions.includes(option) && styles.optionSelected]}><Text style={[styles.optionText, selectedOptions.includes(option) && styles.optionTextSelected]}>{option} · ₹{DEMO_PRICES[option]}</Text></TouchableOpacity>)}</View>
           <Text style={styles.cardTitle}>Choose a date</Text>
           <View style={styles.options}>{dates.map((date) => <TouchableOpacity key={date} onPress={() => setBookingDate(date)} style={[styles.option, bookingDate === date && styles.optionSelected]}><Text style={[styles.optionText, bookingDate === date && styles.optionTextSelected]}>{date}</Text></TouchableOpacity>)}</View>
           <Text style={styles.cardTitle}>Choose a time</Text>
           <View style={styles.options}>{['9:00 AM', '11:00 AM', '2:00 PM', '4:00 PM'].map((time) => <TouchableOpacity key={time} onPress={() => setBookingTime(time)} style={[styles.option, bookingTime === time && styles.optionSelected]}><Text style={[styles.optionText, bookingTime === time && styles.optionTextSelected]}>{time}</Text></TouchableOpacity>)}</View>
-          {selectedOption ? <Text style={styles.notice}>Simulated service charge: ₹{DEMO_PRICES[selectedOption]} · No payment will be collected.</Text> : null}
-          <TouchableOpacity disabled={!selectedOption || !bookingDate || !bookingTime || saving} style={[styles.button, (!selectedOption || !bookingDate || !bookingTime || saving) && styles.disabled]} onPress={saveDemoBooking}><Text style={styles.buttonText}>{saving ? 'Saving…' : 'Confirm simulated booking'}</Text></TouchableOpacity>
+          {selectedOptions.length ? <Text style={styles.notice}>Total for {selectedOptions.length} {selectedOptions.length === 1 ? 'service' : 'services'}: ₹{total}</Text> : null}
+          <TouchableOpacity disabled={!selectedOptions.length || !bookingDate || !bookingTime} style={[styles.button, (!selectedOptions.length || !bookingDate || !bookingTime) && styles.disabled]} onPress={() => setBookingStage('payment')}><Text style={styles.buttonText}>Confirm booking</Text></TouchableOpacity>
+          </> : <>
+          <Text style={styles.cardTitle}>Booking summary</Text>
+          {selectedOptions.map((option) => <Text key={option} style={styles.subtle}>{option} · ₹{DEMO_PRICES[option]}</Text>)}
+          <Text style={styles.subtle}>{bookingDate} · {bookingTime}</Text>
+          <Text style={styles.notice}>Total: ₹{total}</Text>
+          <View style={styles.paymentCard}>
+            <View style={styles.paymentHeading}><View style={styles.paymentHeadingIcon}><Ionicons name="wallet-outline" size={22} color="#287A55" /></View><View style={styles.grow}><Text style={styles.paymentTitle}>Choose how to pay</Text><Text style={styles.paymentHint}>Select one option to continue</Text></View></View>
+            {PAYMENT_OPTIONS.map((option) => {
+              const selected = paymentMethod === option.id;
+              const [backgroundColor, iconColor] = PAYMENT_COLORS[option.id];
+              return <TouchableOpacity key={option.id} accessibilityRole="radio" accessibilityState={{ checked: selected }} style={[styles.paymentOption, selected && styles.paymentOptionSelected]} onPress={() => { setPaymentMethod(option.id); setPaymentProvider(''); }}>
+                <View style={[styles.paymentIcon, { backgroundColor }]}><Ionicons name={option.icon} size={21} color={iconColor} /></View><View style={styles.grow}><Text style={styles.paymentOptionTitle}>{option.id === 'cod' ? 'Pay at service' : option.label}</Text><Text style={styles.paymentHint}>{option.id === 'cod' ? 'Pay when the service is provided' : option.detail}</Text></View><Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={23} color={selected ? '#287A55' : '#A7B2C1'} />
+              </TouchableOpacity>;
+            })}
+            {paymentOption?.providers && <View style={styles.providerBox}><Text style={styles.paymentOptionTitle}>Choose {paymentMethod === 'bank' ? 'a bank' : paymentMethod === 'wallet' ? 'a wallet' : 'an app'}</Text><View style={styles.providerOptions}>{paymentOption.providers.map((provider) => <TouchableOpacity key={provider} accessibilityRole="radio" accessibilityState={{ checked: paymentProvider === provider }} onPress={() => setPaymentProvider(provider)} style={[styles.providerChip, paymentProvider === provider && styles.providerChipSelected]}><Text style={[styles.providerText, paymentProvider === provider && styles.providerTextSelected]}>{provider}</Text></TouchableOpacity>)}</View></View>}
+            <Text style={styles.subtle}>Your choice is saved as a preference only. Online payments are not connected and no money is collected.</Text>
+          </View>
+          <TouchableOpacity disabled={!paymentReady || saving} style={[styles.button, (!paymentReady || saving) && styles.disabled]} onPress={saveDemoBooking}><Text style={styles.buttonText}>{saving ? 'Saving…' : 'Save booking'}</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.secondary} onPress={() => setBookingStage('details')}><Text style={styles.secondaryText}>Edit booking</Text></TouchableOpacity>
+          </>}
           {bookingMessage ? <Text style={styles.empty}>{bookingMessage}</Text> : null}
-        </ScrollView></SafeAreaView>
+        </ScrollView>{bookingSaved && <BookingSuccess title="Booking saved" message="Your example booking is saved on this device. No appointment has been sent to a provider." onContinue={() => { setBookingOpen(false); router.replace('/(rider)/(tabs)/activities'); }} />}</SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -223,6 +254,21 @@ export default function HomeSpaScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F5F8F6' },
+  paymentCard: { backgroundColor: '#fff', borderRadius: 18, padding: 16, marginVertical: 16, gap: 10 },
+  paymentHeading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  paymentHeadingIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#E8F5EC', alignItems: 'center', justifyContent: 'center' },
+  paymentTitle: { color: '#1E293B', fontSize: 17, fontWeight: '800' },
+  paymentHint: { color: '#66758A', fontSize: 12, lineHeight: 18, marginTop: 3 },
+  paymentOption: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#E1E7EF', backgroundColor: '#FFFFFF', borderRadius: 14, padding: 11 },
+  paymentOptionSelected: { backgroundColor: '#EDF8F0', borderColor: '#80B995', borderWidth: 1.5 },
+  paymentOptionTitle: { color: '#24334A', fontSize: 14, fontWeight: '700' },
+  paymentIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  providerBox: { backgroundColor: '#F3F8F4', borderRadius: 14, padding: 14 },
+  providerOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  providerChip: { borderWidth: 1, borderColor: '#D6DFEB', backgroundColor: '#FFFFFF', borderRadius: 20, paddingHorizontal: 13, paddingVertical: 10 },
+  providerChipSelected: { backgroundColor: '#E2F3E7', borderColor: '#70A982' },
+  providerText: { color: '#45556B', fontSize: 12 },
+  providerTextSelected: { color: '#23633F', fontWeight: '800' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', gap: 12 },
   back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: THEME.colors.textPrimary },
