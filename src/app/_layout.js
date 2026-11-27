@@ -38,8 +38,7 @@ function RootNavigationGate() {
       (inLocationPermissionScreen ||
         (inPublic && segments[0] !== 'restaurant-partner') ||
         (role === 'driver' && segments[0] === '(rider)') ||
-        (role === 'user' && segments[0] === 'driver') ||
-        (role === 'merchant' && segments[0] !== 'restaurant-partner'))
+        (role === 'user' && segments[0] === 'driver'))
     ) {
       router.replace(
         role === 'driver'

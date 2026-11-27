@@ -10,7 +10,6 @@ import { useSession } from '../../context/SessionProvider';
 export default function AuthForm({ signup = false, compact = false, dense = false, onSwitch, onSignedIn }) {
   const { beginConfirmation, endConfirmation } = useSession();
   const [values, setValues] = useState({ name: '', email: '', password: '', confirmPassword: '' });
-  const [signupRole, setSignupRole] = useState('user');
   const [touched, setTouched] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [visible, setVisible] = useState({});
@@ -82,7 +81,7 @@ export default function AuthForm({ signup = false, compact = false, dense = fals
     try {
       const credentials = { email: values.email.trim(), password: values.password };
       const { data, error } = signup
-        ? await supabase.auth.signUp({ ...credentials, options: { data: { full_name: values.name.trim(), unigo_role: signupRole } } })
+        ? await supabase.auth.signUp({ ...credentials, options: { data: { full_name: values.name.trim(), unigo_role: 'user' } } })
         : await supabase.auth.signInWithPassword(credentials);
       if (error) throw error;
       if (data.session && signup) {
@@ -170,12 +169,6 @@ export default function AuthForm({ signup = false, compact = false, dense = fals
 
   return (
     <View style={[styles.form, compact && styles.compactForm, dense && styles.denseForm]}>
-      {signup && <View style={styles.field}>
-        <Text style={styles.label}>I want to join as</Text>
-        <View style={styles.roleRow}>
-          {[{ value: 'user', label: 'User', icon: 'person-outline' }, { value: 'driver', label: 'Driver', icon: 'car-outline' }].map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: signupRole === option.value, disabled: busy }} disabled={busy} onPress={() => setSignupRole(option.value)} style={[styles.roleOption, signupRole === option.value && styles.roleSelected]}><Ionicons name={option.icon} size={20} color={signupRole === option.value ? '#0F7A56' : '#729084'} /><Text style={[styles.roleText, signupRole === option.value && styles.roleTextSelected]}>{option.label}</Text></Pressable>)}
-        </View>
-      </View>}
       {fields.map((field, index) => {
         const error = (submitted || touched[field.key]) && errors[field.key];
         return <View key={field.key} style={[styles.field, compact && styles.compactField]}>
@@ -221,7 +214,6 @@ export default function AuthForm({ signup = false, compact = false, dense = fals
       <Pressable accessibilityRole="button" accessibilityLabel="Continue with Google" disabled={busy} onPress={signInWithGoogle} style={({ pressed }) => [styles.googleButton, (pressed || busy) && styles.dimmed]}>
         <Text style={styles.googleMark}>G</Text><Text style={styles.googleText}>Continue with Google</Text>
       </Pressable>
-      {signup && <Text style={styles.confirmCopy}>Google accounts start as User. You can switch to Driver from your profile.</Text>}
       <View style={styles.switchRow}><Text style={styles.switchCopy}>{signup ? 'Already have an account?' : 'New to UniGo?'}</Text><Pressable accessibilityRole="button" onPress={onSwitch} disabled={busy} style={styles.switchButton}><Text style={styles.switchText}>{signup ? 'Log in' : 'Sign up'}</Text></Pressable></View>
     </View>
   );
@@ -229,7 +221,6 @@ export default function AuthForm({ signup = false, compact = false, dense = fals
 
 const styles = StyleSheet.create({
   form: { gap: 18 }, field: { gap: 8 }, label: { color: '#254635', fontSize: 13, fontWeight: '700' },
-  roleRow: { flexDirection: 'row', gap: 10 }, roleOption: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: '#BCCFC2', backgroundColor: '#fff', borderRadius: 14 }, roleSelected: { borderColor: '#0F7A56', backgroundColor: '#E4F3E9', borderWidth: 2 }, roleText: { color: '#647D70', fontWeight: '700' }, roleTextSelected: { color: '#0F7A56' },
   inputBox: { flexDirection: 'row', alignItems: 'center', paddingLeft: 15, borderWidth: 1, borderColor: '#DAE6DE', borderRadius: 15, backgroundColor: '#fff', minHeight: 56 },
   focused: { borderColor: '#0F7A56', backgroundColor: '#FAFDFB' }, invalid: { borderColor: '#C55454' },
   input: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 16, color: '#17382A', fontSize: 15 }, eye: { minHeight: 48, width: 48, alignItems: 'center', justifyContent: 'center' },

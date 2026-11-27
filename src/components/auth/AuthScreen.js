@@ -1,5 +1,5 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -22,16 +22,17 @@ export default function AuthScreen({ signup = false }) {
               {!short && <Text style={styles.description}>{signup ? 'Your city, all in one place.' : 'Your next journey starts here.'}</Text>}
             </View>
             <View style={[styles.card, short && styles.shortCard]}><AuthForm key={signup ? 'signup' : 'login'} signup={signup} compact dense={short} onSwitch={() => router.replace(signup ? '/login' : '/signup')} /></View>
-            <Pressable
+            <TouchableOpacity
               accessibilityRole="button"
               style={styles.merchantLink}
+              activeOpacity={0.7}
               onPress={() => router.push('/restaurant-partner')}
             >
               <Ionicons name="restaurant-outline" size={15} color="#0F7A56" />
               <Text style={styles.merchantLinkText}>
                 Own a restaurant or shop? <Text style={styles.merchantLinkHighlight}>Partner with UniGo ›</Text>
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -13,6 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSession } from '../context/SessionProvider';
 import { useRole } from '../context/RoleProvider';
 import {
   getActiveMerchantProfile,
@@ -34,6 +35,7 @@ const CUISINE_OPTIONS = [
 export default function RestaurantPartnerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useSession();
   const { chooseRole } = useRole();
 
   const [loading, setLoading] = useState(true);
@@ -69,6 +71,28 @@ export default function RestaurantPartnerScreen() {
       mounted = false;
     };
   }, []);
+
+  const handleOpenCustomerView = async (target) => {
+    if (!user) {
+      Alert.alert(
+        'Sign In Required',
+        'Please sign in or create an account to view and place orders in customer view.',
+        [
+          { text: 'Sign In / Sign Up', onPress: () => router.push('/login') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+    if (target === 'restaurant') {
+      router.push(profile?.id ? { pathname: '/(rider)/restaurant', params: { id: profile.id } } : '/(rider)/food');
+    } else if (target === 'food') {
+      router.push('/(rider)/food');
+    } else {
+      await chooseRole('user');
+      router.push('/(rider)/(tabs)');
+    }
+  };
 
   const handleRegister = async () => {
     if (!name.trim()) {
@@ -152,7 +176,7 @@ export default function RestaurantPartnerScreen() {
           },
           {
             text: 'View in Food App',
-            onPress: () => router.push('/(rider)/food'),
+            onPress: () => handleOpenCustomerView('restaurant'),
           },
         ]
       );
@@ -176,7 +200,10 @@ export default function RestaurantPartnerScreen() {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       {/* Top Header */}
       <View style={styles.header}>
-        <PressableScale onPress={() => router.push('/role-selection')} style={styles.backBtn}>
+        <PressableScale
+          onPress={() => (router.canGoBack() ? router.back() : router.replace(user ? '/(rider)/(tabs)' : '/welcome'))}
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={22} color="#0F172A" />
         </PressableScale>
         <View style={{ flex: 1 }}>
@@ -187,7 +214,7 @@ export default function RestaurantPartnerScreen() {
         </View>
         <TouchableOpacity
           style={styles.switchRoleBtn}
-          onPress={() => router.push('/role-selection')}
+          onPress={() => router.push(user ? '/role-selection' : '/welcome')}
         >
           <Ionicons name="swap-horizontal" size={16} color="#0F7A56" />
           <Text style={styles.switchRoleText}>Switch</Text>
@@ -199,6 +226,18 @@ export default function RestaurantPartnerScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {!user && (
+          <View style={styles.guestBanner}>
+            <Ionicons name="information-circle-outline" size={18} color="#B45309" />
+            <Text style={styles.guestText}>
+              Listing in demo mode.{' '}
+              <Text style={styles.guestLink} onPress={() => router.push('/login')}>
+                Log in or sign up
+              </Text>{' '}
+              to sync your eatery to your UniGo account.
+            </Text>
+          </View>
+        )}
         {/* ─── CASE A: RESTAURANT ALREADY REGISTERED (DASHBOARD) ──── */}
         {profile ? (
           <>
@@ -290,11 +329,7 @@ export default function RestaurantPartnerScreen() {
             {/* Actions */}
             <PressableScale
               style={styles.primaryBtn}
-              onPress={() =>
-                profile?.id
-                  ? router.push({ pathname: '/(rider)/restaurant', params: { id: profile.id } })
-                  : router.push('/(rider)/food')
-              }
+              onPress={() => handleOpenCustomerView('restaurant')}
             >
               <Ionicons name="eye-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
               <Text style={styles.primaryBtnText}>View My Live Restaurant</Text>
@@ -302,7 +337,7 @@ export default function RestaurantPartnerScreen() {
 
             <PressableScale
               style={[styles.outlineBtn, { marginTop: 10 }]}
-              onPress={() => router.push('/(rider)/food')}
+              onPress={() => handleOpenCustomerView('food')}
             >
               <Ionicons name="fast-food-outline" size={18} color="#0F7A56" style={{ marginRight: 8 }} />
               <Text style={styles.outlineBtnText}>Browse All UniGo Food</Text>
@@ -310,7 +345,7 @@ export default function RestaurantPartnerScreen() {
 
             <PressableScale
               style={styles.outlineBtn}
-              onPress={() => router.push('/(rider)/(tabs)')}
+              onPress={() => handleOpenCustomerView('customer')}
             >
               <Text style={styles.outlineBtnText}>Switch to Customer View</Text>
             </PressableScale>
@@ -629,4 +664,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   outlineBtnText: { color: '#0F7A56', fontSize: 14, fontWeight: '800' },
+
+  /* Guest Banner */
+  guestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  guestText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  guestLink: {
+    color: '#0F7A56',
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
 });

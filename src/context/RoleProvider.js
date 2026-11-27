@@ -7,7 +7,7 @@ export function RoleProvider({ children }) {
   const [selection, setSelection] = useState(null);
   const savedRole = user?.user_metadata?.unigo_role;
   const role = !user
-    ? null
+    ? (selection?.role || null)
     : selection?.userId === user.id
     ? selection.role
     : savedRole === 'driver'
