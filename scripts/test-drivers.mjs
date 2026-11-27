@@ -21,6 +21,7 @@ test("Driver database: identity, compatibility, allocation, lifecycle, seed isol
         "utf8",
       ),
     );
+    await db.exec(await readFile(new URL("../supabase/migrations/202611210001_driver_fallback.sql", import.meta.url), "utf8"));
     const users = Array.from(
       { length: 5 },
       (_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
@@ -170,6 +171,15 @@ test("Driver database: identity, compatibility, allocation, lifecycle, seed isol
       ).rows[0].n,
       1800,
     );
+    await as(users[0]);
+    await action("presence", { online: true, latitude: 22.304, longitude: 70.802 });
+    await as(users[1]);
+    const liveFirst = await action("request", { ...request, simulated: true });
+    assert.equal(liveFirst.driver_id, driver.id);
+    assert.equal(liveFirst.simulated, false);
+    await action("cancel", { id: liveFirst.id });
+    await as(users[0]);
+    await action("presence", { online: false });
     await as(users[1]);
     assert.equal((await action("request", request)).status, "unavailable");
     const simulation = await action("request", { ...request, simulated: true });

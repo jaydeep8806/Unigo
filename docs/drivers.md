@@ -6,7 +6,7 @@ No runtime dependencies or separate application were introduced.
 
 ## Database setup
 
-1. Apply `supabase/migrations/202611060002_drivers.sql` to the configured Supabase
+1. Apply `supabase/migrations/202611060002_drivers.sql` and subsequent migrations to the configured Supabase
    project using your normal migration workflow or the SQL editor. The migration
    creates drivers, rides, RLS policies, the matching RPC and the Realtime publication.
 2. Enable anonymous sign-ins in Supabase Auth for existing guest sessions. The
@@ -32,8 +32,8 @@ development data, not verified people. Source is recorded as `seed`.
 
 Set `EXPO_PUBLIC_RIDE_SIMULATION=true` and run a development build to book from that
 pool. Both the JavaScript development flag and the server setting must allow it.
-Normal requests match registered drivers only; simulated requests match seed drivers
-only. The trip screen labels simulated rides explicitly. Automatic acceptance and
+Normal requests match registered drivers only. When simulation is enabled, requests
+try registered drivers first and fall back to the compatible seed pool. The trip screen labels simulated rides explicitly. Automatic acceptance and
 progression occur exclusively in the server's simulated branch, never against real
 driver accounts. Set the flag to false to exercise two-device rider/driver booking.
 

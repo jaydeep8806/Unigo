@@ -130,6 +130,7 @@ export default function ActivitiesScreen() {
           <Text style={styles.detail}>Provider: {item.provider || 'Not available'}</Text>
           <Text style={styles.detail}>Appointment: {item.date || 'Date unavailable'} {item.time || ''}</Text>
           <Text style={styles.detail}>Location: {item.address || 'Not available'}</Text>
+          {item.paymentMethod && <Text style={styles.detail}>Payment preference: {item.paymentLabel || 'Pay at service'}</Text>}
           <Text style={styles.note}>Appointment scheduled with verified professional.</Text>
         </>}
       </View>}

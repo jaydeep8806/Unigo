@@ -25,9 +25,20 @@ import { searchLocations, reverseGeocode, searchOnDevice } from '../../services/
 import { fetchDrivingRoute } from '../../services/osrm';
 import { calculateAllFares } from '../../services/pricing';
 import LeafletMap from '../../components/LeafletMap';
+import BookingSuccess from '../../components/BookingSuccess';
 import PressableScale from '../../components/PressableScale';
 import Toast from '../../components/Toast';
 import { useSavedLocations } from '../../hooks/useSavedLocations';
+
+// Approximate the selected city's service area using the app's 25 km launch radius.
+function outsideCity(point, city) {
+  if (!point || !Number.isFinite(city?.lat) || !Number.isFinite(city?.lng)) return false;
+  const radians = Math.PI / 180;
+  const dLat = (point.latitude - city.lat) * radians;
+  const dLng = (point.longitude - city.lng) * radians;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(city.lat * radians) * Math.cos(point.latitude * radians) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.min(1, Math.sqrt(h))) > 25;
+}
 
 export default function BookScreen() {
   const router = useRouter();
@@ -43,6 +54,7 @@ export default function BookScreen() {
   const { places, addRecent, savePlace } = useSavedLocations();
 
   const [bookingInProgress, setBookingInProgress] = useState(false);
+  const [submittedRide, setSubmittedRide] = useState(null);
   const [locatingPickup, setLocatingPickup] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
   const [reviewRide, setReviewRide] = useState(false);
@@ -183,19 +195,13 @@ export default function BookScreen() {
 
   // Avoid selecting essentially the same point as pickup while allowing short rides.
   const isTooClose = pickerTarget === 'drop' && pickerDistKm !== null && pickerDistKm < 0.02;
+  const pickerOutsideCity = isCarpool && pickerCoords && outsideCity({ latitude: pickerCoords.lat, longitude: pickerCoords.lng }, selectedCity || DEFAULT_CITY);
 
-  // Real-time Rapido fare estimate for the picker banner
+  // Approximate fare based on the straight-line distance in the picker.
   const estPickerFare = useMemo(() => {
     if (pickerDistKm === null || pickerDistKm < 0.02) return null;
-    const bike = Math.max(
-      25,
-      Math.round(25 + Math.max(0, pickerDistKm - 1.5) * 9 + pickerDistKm * 3 * 1.0 + 3)
-    );
-    const auto = Math.max(
-      35,
-      Math.round(35 + Math.max(0, pickerDistKm - 1.5) * 13 + pickerDistKm * 3 * 1.25 + 4)
-    );
-    return { bike, auto };
+    const [bike, auto] = calculateAllFares(pickerDistKm);
+    return { bike: bike.fare, auto: auto.fare };
   }, [pickerDistKm]);
 
   const matchingSavedPlaces = useMemo(() => {
@@ -286,6 +292,7 @@ export default function BookScreen() {
   // Calculate driving route using OSRM
   const calculateRoute = useCallback(async (start, end) => {
     const requestId = ++routeRequestRef.current;
+    setReviewRide(false);
     setRouteLoading(true);
     setRouteCoords([]);
     setRouteInfo(null);
@@ -298,6 +305,7 @@ export default function BookScreen() {
       setRouteCoords(data.coordinates.map((c) => [c.latitude, c.longitude]));
       setRouteInfo({
         distanceKm: +(data.distanceMeters / 1000).toFixed(1),
+        distanceMeters: data.distanceMeters,
         durationMins: Math.max(1, Math.round(data.durationSeconds / 60)),
       });
     } catch {
@@ -309,9 +317,11 @@ export default function BookScreen() {
       ]);
       const dLat = (end.latitude - start.latitude) * 111;
       const dLon = (end.longitude - start.longitude) * 111 * Math.cos((start.latitude * Math.PI) / 180);
-      const dist = +Math.sqrt(dLat * dLat + dLon * dLon).toFixed(1);
+      const rawDistance = Math.sqrt(dLat * dLat + dLon * dLon);
+      const dist = +rawDistance.toFixed(1);
       setRouteInfo({
         distanceKm: Math.max(0.5, dist),
+        distanceMeters: rawDistance * 1000,
         durationMins: Math.max(2, Math.round(dist * 3)),
         estimated: true,
       });
@@ -549,16 +559,19 @@ export default function BookScreen() {
   // Compute fares using Rapido pricing formula
   const distance = routeInfo?.distanceKm || 0;
   const duration = routeInfo?.durationMins || 0;
+  const carpoolOutsideCity = isCarpool && outsideCity(destination, selectedCity || DEFAULT_CITY);
+  const outsideServiceRange = !carpoolOutsideCity && (routeInfo?.distanceMeters ?? 0) > 35000;
   const fares = useMemo(() => {
-    return calculateAllFares(distance, duration, isCarpool);
-  }, [distance, duration, isCarpool]);
+    const allFares = calculateAllFares(distance, duration, isCarpool);
+    return carpoolOutsideCity ? allFares.filter((fare) => fare.id === 'car' || fare.id === 'sedan') : allFares;
+  }, [distance, duration, isCarpool, carpoolOutsideCity]);
 
   const selectedFareObj = useMemo(() => {
     return fares.find((f) => f.id === selectedVehicle) || fares[0];
   }, [fares, selectedVehicle]);
 
   const handleConfirmRide = async () => {
-    if (!destination || !selectedFareObj || origin.needsPickupSelection) return;
+    if (!destination || !selectedFareObj || origin.needsPickupSelection || routeLoading || !routeInfo || outsideServiceRange) return;
 
     setReviewError('');
     setBookingInProgress(true);
@@ -568,7 +581,7 @@ export default function BookScreen() {
       const ride = await addRide({
         origin: origin.title,
         destination: destination.title,
-        vehicleId: selectedVehicle,
+        vehicleId: selectedFareObj.id,
         vehicleName: selectedFareObj.name,
         fare: fareAmount,
         distanceKm: distance,
@@ -581,8 +594,7 @@ export default function BookScreen() {
         routeCoords,
       });
 
-      setReviewRide(false);
-      router.push({ pathname: '/(rider)/trip', params: { id: ride.id } });
+      setSubmittedRide(ride);
     } catch (e) {
       setReviewError(e.message || 'Could not complete booking. Please try again.');
     } finally {
@@ -944,7 +956,7 @@ export default function BookScreen() {
                 <ActivityIndicator size="small" color={THEME.colors.primary} style={{ marginLeft: 8 }} />
               )}
             </View>
-            {pickerTarget === 'drop' && estPickerFare && !isTooClose && (
+            {pickerTarget === 'drop' && estPickerFare && !isTooClose && !pickerOutsideCity && (
               <Text style={styles.pickerFareEstimate}>
                 Estimate: ₹{estPickerFare.bike} (Bike) • ₹{estPickerFare.auto} (Auto)
               </Text>
@@ -990,6 +1002,7 @@ export default function BookScreen() {
 
           {routeInfo?.estimated && <Text style={{ color: '#9a5b00', fontSize: 12, marginBottom: 6 }}>Road route unavailable · distance and fare are estimates</Text>}
           {origin.needsPickupSelection && <Text style={{ color: '#9a5b00', fontSize: 12, marginBottom: 6 }}>Choose your exact pickup on the map before booking.</Text>}
+          {outsideServiceRange && <Text accessibilityRole="alert" style={{ color: '#b42318', fontSize: 15, fontWeight: '700', marginBottom: 8 }}>Service not available for trips over 35 km. Please choose a closer destination.</Text>}
           {/* Route meta stats */}
           <View style={styles.routeMetaRow}>
             <View style={styles.routeStat}>
@@ -1013,9 +1026,9 @@ export default function BookScreen() {
           </View>
 
           {/* Vehicle options */}
-          <View style={styles.vehicleRow}>
+          {!outsideServiceRange && <View style={styles.vehicleRow}>
             {fares.map((v) => {
-              const isSelected = selectedVehicle === v.id;
+              const isSelected = selectedFareObj?.id === v.id;
               return (
                 <TouchableOpacity
                   key={v.id}
@@ -1037,20 +1050,20 @@ export default function BookScreen() {
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </View>}
 
           {/* Rapido Fare Breakdown Pill */}
-          {selectedFareObj && (
+          {selectedFareObj && !outsideServiceRange && (
             <View style={styles.fareBreakdownBox}>
               <View style={styles.fareBreakdownHeader}>
                 <Ionicons name="flash" size={13} color="#0F7A56" />
                 <Text style={styles.fareBreakdownTitle}>
-                  Estimated fare: Base ₹{selectedFareObj.baseFare} + ₹{selectedFareObj.perKm}/km + ₹{selectedFareObj.perMinute}/min
+                  Estimated fare: ₹{selectedFareObj.perKm}/km
                 </Text>
                 <Text style={styles.fareBreakdownEta}>{selectedFareObj.etaText}</Text>
               </View>
               <Text style={styles.fareBreakdownFormula}>
-                Base ₹{selectedFareObj.baseFare} (first {selectedFareObj.baseKm}km) + ₹{selectedFareObj.distanceFare} distance + ₹{selectedFareObj.timeFare} ride time + ₹{selectedFareObj.platformFee} fee{isCarpool ? ` • Carpool -₹${selectedFareObj.discount}` : ''}
+                {distance} km × ₹{selectedFareObj.perKm}/km = ₹{selectedFareObj.distanceFare}{isCarpool ? ` • Carpool -₹${selectedFareObj.discount}` : ''}
               </Text>
             </View>
           )}
@@ -1060,8 +1073,21 @@ export default function BookScreen() {
           <View style={styles.bookFooter}>
           <TouchableOpacity
             style={styles.bookButton}
-            onPress={() => { setReviewError(''); setReviewRide(true); }}
-            disabled={bookingInProgress || routeLoading || origin.needsPickupSelection}
+            onPress={() => {
+              if (outsideServiceRange) {
+                routeRequestRef.current += 1;
+                setRouteCoords([]);
+                setRouteInfo(null);
+                setDropQuery('');
+                setDestination(null);
+                setSearchResults([]);
+                setReviewRide(false);
+                return;
+              }
+              setReviewError('');
+              setReviewRide(true);
+            }}
+            disabled={bookingInProgress || routeLoading || !routeInfo || origin.needsPickupSelection}
             accessibilityRole="button"
           >
             {bookingInProgress || routeLoading ? (
@@ -1069,7 +1095,7 @@ export default function BookScreen() {
             ) : (
               <>
                 <Text style={styles.bookButtonText}>
-                  {`Continue with ${selectedFareObj?.name || 'Ride'}`} • ₹{selectedFareObj?.fare}
+                  {outsideServiceRange ? 'Service not available' : `Continue with ${selectedFareObj?.name || 'Ride'} • ₹${selectedFareObj?.fare}`}
                 </Text>
                 <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
               </>
@@ -1079,8 +1105,8 @@ export default function BookScreen() {
         </View>
       )}
 
-      {reviewRide && destination && selectedFareObj && (
-        <Modal visible animationType="slide" onRequestClose={() => { if (!bookingInProgress) setReviewRide(false); }}>
+      {reviewRide && destination && selectedFareObj && !routeLoading && routeInfo && !outsideServiceRange && (
+        <Modal visible animationType="slide" onRequestClose={() => { if (submittedRide) { setReviewRide(false); setSubmittedRide(null); router.push({ pathname: '/(rider)/trip', params: { id: submittedRide.id } }); } else if (!bookingInProgress) setReviewRide(false); }}>
         <SafeAreaView style={styles.reviewScreen} edges={['top', 'bottom']}>
           <View style={styles.reviewHeader}>
             <TouchableOpacity style={styles.reviewBack} onPress={() => setReviewRide(false)} accessibilityLabel="Back to vehicle selection">
@@ -1119,6 +1145,7 @@ export default function BookScreen() {
               {bookingInProgress ? <ActivityIndicator color="#fff" /> : <Text style={styles.reviewConfirmText}>Confirm {selectedFareObj.name}</Text>}
             </TouchableOpacity>
           </View>
+          {submittedRide && <BookingSuccess title="Ride requested" message={submittedRide.simulated ? 'Your simulated ride has been requested. No driver will arrive.' : 'Your ride request has been placed. Wait for a driver to accept.'} onContinue={() => { setReviewRide(false); setSubmittedRide(null); router.push({ pathname: '/(rider)/trip', params: { id: submittedRide.id } }); }} />}
         </SafeAreaView>
         </Modal>
       )}

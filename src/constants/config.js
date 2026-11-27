@@ -29,7 +29,7 @@ export const DONATE_NAME = 'UniGo';
 export const VEHICLE_TYPES = [
   {
     id: 'bike',
-    name: 'UniGo Moto',
+    name: 'UniGo Bike',
     icon: '🏍️',
     capacity: '1 Seat',
     baseFare: 20,
@@ -41,14 +41,14 @@ export const VEHICLE_TYPES = [
     icon: '🛺',
     capacity: '3 Seats',
     baseFare: 30,
-    perKm: 12,
+    perKm: 15,
   },
   {
     id: 'car',
-    name: 'UniGo Prime',
+    name: 'UniGo Cab',
     icon: '🚗',
     capacity: '4 Seats',
     baseFare: 50,
-    perKm: 18,
+    perKm: 20,
   },
 ];

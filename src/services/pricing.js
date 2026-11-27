@@ -10,16 +10,16 @@
 export const PRICING_CONFIG = {
   bike: {
     id: 'bike',
-    name: 'UniGo Moto',
+    name: 'UniGo Bike',
     icon: '🏍️',
     capacity: '1 Seat',
     etaText: '2 mins away',
-    baseFare: 25, // Covers first 1.5 km
-    baseKm: 1.5,
-    perKm: 9.0, // After 1.5 km
-    perMinute: 1.0, // Traffic / ride time charge
-    platformFee: 3,
-    minFare: 25,
+    baseFare: 0,
+    baseKm: 0,
+    perKm: 8,
+    perMinute: 0,
+    platformFee: 0,
+    minFare: 0,
   },
   auto: {
     id: 'auto',
@@ -27,29 +27,29 @@ export const PRICING_CONFIG = {
     icon: '🛺',
     capacity: '3 Seats',
     etaText: '3 mins away',
-    baseFare: 35, // Covers first 1.5 km
-    baseKm: 1.5,
-    perKm: 13.0,
-    perMinute: 1.25,
-    platformFee: 4,
-    minFare: 35,
+    baseFare: 0,
+    baseKm: 0,
+    perKm: 15,
+    perMinute: 0,
+    platformFee: 0,
+    minFare: 0,
   },
   car: {
     id: 'car',
-    name: 'UniGo Mini',
+    name: 'UniGo Cab',
     icon: '🚗',
     capacity: '4 Seats',
     etaText: '5 mins away',
-    baseFare: 60, // Covers first 2.0 km
-    baseKm: 2.0,
-    perKm: 18.0,
-    perMinute: 1.75,
-    platformFee: 5,
-    minFare: 60,
+    baseFare: 0,
+    baseKm: 0,
+    perKm: 20,
+    perMinute: 0,
+    platformFee: 0,
+    minFare: 0,
   },
   sedan: {
-    id: 'sedan', name: 'UniGo Sedan', icon: '🚘', capacity: '4 Seats', etaText: '7 mins away',
-    baseFare: 85, baseKm: 2, perKm: 22, perMinute: 2, platformFee: 6, minFare: 85,
+    id: 'sedan', name: 'UniGo Luxury', icon: '🚘', capacity: '4 Seats', etaText: '7 mins away',
+    baseFare: 0, baseKm: 0, perKm: 30, perMinute: 0, platformFee: 0, minFare: 0,
   },
 };
 
