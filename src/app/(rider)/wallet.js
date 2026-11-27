@@ -184,6 +184,48 @@ export default function WalletScreen() {
           </View>
         </LinearGradient>
 
+        {/* Add Money Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Add Money to Wallet</Text>
+
+          {/* Quick chips */}
+          <View style={styles.chipsRow}>
+            {QUICK_AMOUNTS.map((amt) => (
+              <PressableScale
+                key={amt}
+                style={[styles.chip, selectedChip === amt && styles.chipActive]}
+                onPress={() => handleChipPress(amt)}
+              >
+                <Text style={[styles.chipText, selectedChip === amt && styles.chipTextActive]}>
+                  {CURRENCY_SYMBOL}{amt}
+                </Text>
+              </PressableScale>
+            ))}
+          </View>
+
+          {/* Custom input */}
+          <View style={styles.inputRow}>
+            <Text style={styles.inputPrefix}>{CURRENCY_SYMBOL}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter amount"
+              placeholderTextColor={THEME.colors.mutedText}
+              keyboardType="numeric"
+              value={customAmount}
+              onChangeText={(t) => {
+                setCustomAmount(t);
+                setSelectedChip(null);
+                setError('');
+              }}
+            />
+          </View>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <PressableScale style={styles.addBtn} onPress={handleAddMoney}>
+            <Text style={styles.addBtnText}>Add to Wallet</Text>
+          </PressableScale>
+        </View>
+
         {/* Banking & Transfers (Coming Soon Features) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Banking & Transfers</Text>
@@ -268,48 +310,6 @@ export default function WalletScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
-        </View>
-
-        {/* Add Money Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Add Money to Wallet</Text>
-
-          {/* Quick chips */}
-          <View style={styles.chipsRow}>
-            {QUICK_AMOUNTS.map((amt) => (
-              <PressableScale
-                key={amt}
-                style={[styles.chip, selectedChip === amt && styles.chipActive]}
-                onPress={() => handleChipPress(amt)}
-              >
-                <Text style={[styles.chipText, selectedChip === amt && styles.chipTextActive]}>
-                  {CURRENCY_SYMBOL}{amt}
-                </Text>
-              </PressableScale>
-            ))}
-          </View>
-
-          {/* Custom input */}
-          <View style={styles.inputRow}>
-            <Text style={styles.inputPrefix}>{CURRENCY_SYMBOL}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter amount"
-              placeholderTextColor={THEME.colors.mutedText}
-              keyboardType="numeric"
-              value={customAmount}
-              onChangeText={(t) => {
-                setCustomAmount(t);
-                setSelectedChip(null);
-                setError('');
-              }}
-            />
-          </View>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          <PressableScale style={styles.addBtn} onPress={handleAddMoney}>
-            <Text style={styles.addBtnText}>Add to Wallet</Text>
-          </PressableScale>
         </View>
 
         {/* Transactions Section */}
