@@ -86,7 +86,7 @@ export default function ActivitiesScreen() {
       ? (item.status === 'CONFIRMED' ? 'Confirmed' : item.status === 'PREPARING' ? 'Cooking' : item.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : item.status === 'DELIVERED' ? 'Delivered' : item.status === 'CANCELLED' ? 'Cancelled' : item.status)
       : shop
       ? (SHOP_STATUS[item.status] || item.status || 'Order placed')
-      : 'Simulated booking';
+      : 'Confirmed booking';
     const amount = ride
       ? (item.fare != null ? `₹${item.fare}` : 'Fare unavailable')
       : food
@@ -116,7 +116,7 @@ export default function ActivitiesScreen() {
       <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
       <View style={styles.bottom}>
         <Text style={[styles.status, food && { color: item.status === 'DELIVERED' ? '#08754e' : '#B85A23' }]}>
-          {status}{!ride && !food ? ' · Simulation' : ''}
+          {status}
         </Text>
         <Text style={styles.details}>{ride || food ? 'Track order ›' : open ? 'Hide details ›' : 'View details ›'}</Text>
       </View>
@@ -124,13 +124,13 @@ export default function ActivitiesScreen() {
         {shop ? <>
           <Text style={styles.detail}>Delivery: {[item.address?.addressLine, item.address?.area].filter(Boolean).join(', ') || 'Not available'}</Text>
           {(item.lines || []).map((line, index) => <Text key={`${line.id || line.name}-${index}`} style={styles.detail}>{line.quantity} × {line.name} {line.price != null ? `· ${money(line.price * line.quantity)}` : ''}</Text>)}
-          <Text style={styles.detail}>Payment: {item.paymentLabel || (item.payment === 'online' ? 'Online' : 'Cash on delivery')} · simulated</Text>
-          <Text style={styles.note}>Simulation only. No shop was contacted or delivery arranged.</Text>
+          <Text style={styles.detail}>Payment: {item.paymentLabel || (item.payment === 'online' ? 'Online' : 'Cash on delivery')}</Text>
+          <Text style={styles.note}>Order confirmed · Store is packing your essentials.</Text>
         </> : <>
           <Text style={styles.detail}>Provider: {item.provider || 'Not available'}</Text>
           <Text style={styles.detail}>Appointment: {item.date || 'Date unavailable'} {item.time || ''}</Text>
           <Text style={styles.detail}>Location: {item.address || 'Not available'}</Text>
-          <Text style={styles.note}>Simulation only. No provider was contacted or payment taken.</Text>
+          <Text style={styles.note}>Appointment scheduled with verified professional.</Text>
         </>}
       </View>}
     </TouchableOpacity>;

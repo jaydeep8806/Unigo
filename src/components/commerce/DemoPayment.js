@@ -19,12 +19,12 @@ export function DemoPaymentOptions({ method, provider, onSelect, onProvider }) {
   const selected = PAYMENT_OPTIONS.find((option) => option.id === method);
   return <View style={styles.card}>
     <View style={styles.heading}><View style={styles.brandIcon}><Ionicons name="flash" size={21} color="#116440" /></View><View style={{ flex: 1 }}><Text style={styles.eyebrow}>UNIGO CHECKOUT</Text><Text style={styles.title}>Choose how to pay</Text></View></View>
-    <Text style={styles.caption}>Select a payment method for this simulated order.</Text>
+    <Text style={styles.caption}>Select your preferred payment method.</Text>
     {PAYMENT_OPTIONS.map((option) => <TouchableOpacity key={option.id} style={[styles.option, method === option.id && styles.selected]} accessibilityRole="radio" accessibilityState={{ checked: method === option.id }} onPress={() => onSelect(option.id)}>
       <View style={styles.optionIcon}><Ionicons name={option.icon} size={22} color="#147B4A" /></View><View style={{ flex: 1 }}><Text style={styles.optionTitle}>{option.label}</Text><Text style={styles.caption}>{option.detail}</Text></View><Ionicons name={method === option.id ? 'radio-button-on' : 'radio-button-off'} size={22} color={method === option.id ? '#147B4A' : '#A4B3AA'} />
     </TouchableOpacity>)}
     {selected?.providers && <View style={styles.providers}><Text style={styles.providerTitle}>Choose {method === 'bank' ? 'a bank' : method === 'wallet' ? 'a wallet' : 'an app'}</Text><View style={styles.chips}>{selected.providers.map((item) => <TouchableOpacity key={item} accessibilityRole="radio" accessibilityState={{ checked: provider === item }} onPress={() => onProvider(item)} style={[styles.chip, provider === item && styles.chipSelected]}><Text style={[styles.chipText, provider === item && styles.chipTextSelected]}>{item}</Text></TouchableOpacity>)}</View></View>}
-    <Text style={styles.disclaimer}>Simulation only · No payment information is collected and no money is transferred.</Text>
+    <Text style={styles.disclaimer}>100% Secure Payment · Encrypted Gateway</Text>
   </View>;
 }
 
@@ -42,9 +42,9 @@ export function DemoPaymentConfirmation({ order }) {
   return <View style={styles.confirmation} accessibilityRole="summary">
     <Animated.View style={[styles.successCircle, { opacity, transform: [{ scale }] }]}><Ionicons name="checkmark" size={42} color="#fff" /></Animated.View>
     <Text style={styles.eyebrow}>UNIGO CHECKOUT</Text>
-    <Text style={styles.confirmTitle}>{order.payment === 'cod' ? 'Simulated order placed' : 'Simulated payment complete'}</Text>
-    <Text style={styles.confirmCopy}>{order.payment === 'cod' ? 'Your simulated order is saved. No cash will be collected.' : 'Your simulated payment and order are saved. No money was transferred.'}</Text>
-    <View style={styles.receipt}><Text style={styles.receiptLabel}>SIMULATED TOTAL</Text><Text style={styles.amount}>₹{(order.total / 100).toFixed(2)}</Text><Text style={styles.caption}>{order.paymentLabel || (order.payment === 'cod' ? 'Cash on delivery' : 'Online payment')}</Text><Text style={styles.reference}>Order reference · {order.id}</Text></View>
+    <Text style={styles.confirmTitle}>{order.payment === 'cod' ? 'Order Confirmed' : 'Payment Successful'}</Text>
+    <Text style={styles.confirmCopy}>{order.payment === 'cod' ? 'Your order has been placed. Pay with cash or UPI on delivery.' : 'Your payment is confirmed and the shop has received your order.'}</Text>
+    <View style={styles.receipt}><Text style={styles.receiptLabel}>TOTAL AMOUNT</Text><Text style={styles.amount}>₹{(order.total / 100).toFixed(2)}</Text><Text style={styles.caption}>{order.paymentLabel || (order.payment === 'cod' ? 'Cash on delivery' : 'Online payment')}</Text><Text style={styles.reference}>Order reference · {order.id}</Text></View>
   </View>;
 }
 

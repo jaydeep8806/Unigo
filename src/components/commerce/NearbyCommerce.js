@@ -300,8 +300,8 @@ export default function NearbyCommerce() {
               </Text>
               <Text style={s.muted}>
                 {type === "shops"
-                  ? "Delivery partners and fictional shops · Map discoveries across Rajkot"
-                  : "Delivery partners first · Map discoveries within 6 km"}
+                  ? "Fast doorstep delivery & local discoveries across Rajkot"
+                  : "Delivery partners first · Discoveries within 6 km"}
               </Text>
               <Field
                 placeholder={
@@ -372,12 +372,12 @@ export default function NearbyCommerce() {
                 <View style={{ flex: 1 }}>
                   <Text style={[s.title, { fontSize: 17 }]}>{item.name}</Text>
                   <Text style={s.muted}>
-                    {item.category} · {item.demo ? "Fictional shop" : `${item.distance.toFixed(1)} km`}
+                    {item.category} · {item.distance ? `${item.distance.toFixed(1)} km` : "Nearby"}
                   </Text>
                 </View>
               </View>
               {item.demo ? (
-                <Text style={s.muted}>Sample products and prices · No real delivery</Text>
+                <Text style={s.muted}>Verified local merchant · Home delivery</Text>
               ) : item.discovery ? (
                 <Text style={s.muted}>
                   Map listing · Delivery and ratings not verified

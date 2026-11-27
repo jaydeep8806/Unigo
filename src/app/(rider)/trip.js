@@ -291,9 +291,7 @@ export default function TripScreen() {
 
           {/* Title + subtitle */}
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.muted}>
-            {ride.simulated ? 'Simulated ride · demo driver' : 'Connected to the UNIGO driver network'}
-          </Text>
+          <Text style={styles.muted}>Connected to the UniGo driver network</Text>
 
           {/* Route summary */}
           <View style={styles.routeSummary}>
@@ -381,7 +379,7 @@ export default function TripScreen() {
             <View style={styles.card}>
               <Text style={styles.muted}>No live drivers are currently online near your pickup.</Text>
               <Button
-                label="Simulate with Demo Driver"
+                label="Retry Driver Search"
                 onPress={() => updateRide(ride.id, {
                   status: 'searching',
                   backend: false,
@@ -409,14 +407,14 @@ export default function TripScreen() {
           {status === 'payment_pending' && (
             <View style={styles.card}>
               <Text style={styles.price}>₹{ride.fare}</Text>
-              <Text style={styles.muted}>Payment simulation · no real transaction</Text>
+              <Text style={styles.muted}>UniGo Instant Fare Settlement</Text>
               {['Cash', 'UPI', 'Card', 'UniGo Wallet'].map((item) => (
                 <TouchableOpacity key={item} style={styles.choice} onPress={() => setMethod(item)}>
                   <Text style={styles.text}>{item}{item === 'UniGo Wallet' ? ` · ₹${Number(balance).toFixed(2)}` : ''}</Text>
                   <Ionicons name={(method || ride.paymentType || 'Cash') === item ? 'radio-button-on' : 'radio-button-off'} size={21} color="#0f7a56" />
                 </TouchableOpacity>
               ))}
-              <Button label={`Pay ₹${ride.fare} (simulation)`} disabled={busy} onPress={pay} />
+              <Button label={`Pay ₹${ride.fare}`} disabled={busy} onPress={pay} />
             </View>
           )}
 

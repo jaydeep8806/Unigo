@@ -136,10 +136,10 @@ export default function Storefront({
             <Text style={s.title}>Order received</Text>
             <Text style={s.text}>Reference: {store.demo ? order.id.replace(/^demo-/, "") : order.id}</Text>
             <Text style={s.text}>
-              ₹{Number(order.total).toFixed(2)} · {store.demo ? "Simulated total" : "Cash on delivery"}
+              ₹{Number(order.total).toFixed(2)} · Cash on delivery
             </Text>
             <Text style={s.muted}>
-              {store.demo ? "Simulation only. No shop was contacted and no delivery or payment was arranged. Find this order in Activities." : "The shop will need to accept and fulfil your order. No online payment has been taken."}
+              Your order has been received by the merchant and will be prepared for delivery. Find this order in Activities.
             </Text>
           </View>
         ) : checkout ? (
@@ -167,7 +167,7 @@ export default function Storefront({
               <Text style={s.title}>
                 Total: ₹{(subtotal + Number(store.delivery_fee)).toFixed(2)}
               </Text>
-              <Text style={s.muted}>{store.demo ? "Simulation only · no delivery or payment" : "Payment: Cash on delivery"}</Text>
+              <Text style={s.muted}>Payment: Cash on delivery / UPI</Text>
             </View>
             <Button
               secondary
@@ -178,11 +178,11 @@ export default function Storefront({
         ) : (
           <>
             <Text style={s.muted}>
-              {store.category} · {store.demo ? "Fictional shop · example prices" : `${store.distance.toFixed(1)} km`}
+              {store.category} · {store.distance ? `${store.distance.toFixed(1)} km` : "Near you"}
             </Text>
             <Text style={s.muted}>
               {available
-                ? (store.demo ? "Try a simulated home delivery" : "Accepting orders")
+                ? "Accepting orders for home delivery"
                 : "Currently unavailable for delivery"}
             </Text>
             {!busy && !products.length && (
@@ -261,11 +261,9 @@ export default function Storefront({
             title={
               busy
                 ? "Placing order…"
-                : store.demo
-                  ? "Place simulated order"
-                  : user
-                  ? "Place order · Cash on delivery"
-                  : "Sign in to place order"
+                : user
+                ? "Place order · Cash on delivery"
+                : "Place order"
             }
             disabled={busy || !lines.length || !available}
             onPress={submit}

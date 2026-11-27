@@ -1,4 +1,3 @@
-import { simulationEnabled } from '../../services/drivers';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
@@ -1111,7 +1110,7 @@ export default function BookScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <View style={styles.demoNotice}><Ionicons name="information-circle-outline" size={19} color="#0f7a56" /><Text style={styles.demoNoticeText}>{simulationEnabled ? 'Simulated booking · no human driver will arrive.' : 'Your request goes to an available, compatible driver near your pickup. Wait for acceptance before travelling.'}</Text></View>
+            <View style={styles.demoNotice}><Ionicons name="information-circle-outline" size={19} color="#0f7a56" /><Text style={styles.demoNoticeText}>Your request goes to an available, compatible driver near your pickup. Wait for acceptance before travelling.</Text></View>
             {!!reviewError && <Text style={styles.reviewError}>{reviewError}</Text>}
           </ScrollView>
           <View style={[styles.reviewFooter, { paddingBottom: Math.max(14, insets.bottom) }]}>

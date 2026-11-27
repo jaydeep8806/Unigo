@@ -461,7 +461,7 @@ export default function RestaurantPartnerScreen() {
                 >
                   <Ionicons name="settings-outline" size={14} color="#64748B" />
                   <Text style={styles.adminActionOutlineText}>
-                    {adminBusy ? 'Updating…' : 'Admin Control: Revoke Approval (Test Review State)'}
+                    {adminBusy ? 'Updating…' : 'Admin Control: Revoke Verification (Return to Review)'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -488,10 +488,10 @@ export default function RestaurantPartnerScreen() {
                 <View style={styles.adminBox}>
                   <View style={styles.adminBoxHeader}>
                     <Ionicons name="shield-outline" size={14} color="#92400E" />
-                    <Text style={styles.adminBoxTitle}>ADMIN VERIFICATION SANDBOX</Text>
+                    <Text style={styles.adminBoxTitle}>ADMIN VERIFICATION DESK</Text>
                   </View>
                   <Text style={styles.adminBoxSub}>
-                    Simulate administrative approval to make this listing visible to all public food buyers.
+                    Complete verification to publish this restaurant live to all public customers.
                   </Text>
                   <TouchableOpacity
                     style={styles.adminApproveBtn}
@@ -501,7 +501,7 @@ export default function RestaurantPartnerScreen() {
                   >
                     <Ionicons name="checkmark-circle" size={16} color="#fff" />
                     <Text style={styles.adminApproveBtnText}>
-                      {adminBusy ? 'Approving…' : '✓ Approve & Publish Live (Admin Demo)'}
+                      {adminBusy ? 'Approving…' : '✓ Approve & Publish Live on UniGo'}
                     </Text>
                   </TouchableOpacity>
                 </View>

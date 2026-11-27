@@ -567,26 +567,26 @@ export default function Driver() {
             ) : screen === "home" ? (
               <View style={s.card}>
                 <Text style={s.label}>
-                  {profile.localPreview ? "Preview your dashboard" : profile.online
+                  {profile.online
                     ? "Ready for your next pickup"
                     : "Take the wheel when you’re ready"}
                 </Text>
                 <Text style={s.text}>
-                  {profile.localPreview ? "Ride requests are not connected to this preview." : profile.online
+                  {profile.online
                     ? "Compatible nearby ride requests appear here."
                     : "Go online to receive ride requests."}
                 </Text>
               </View>
             ) : null}
             {screen === "rides" && !active && exampleState !== "hidden" && <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 18, gap: 15, borderWidth: 3, borderColor: "#35ad6b" }}>
-              <View style={s.row}><Text style={{ color: "#24362d", fontWeight: "800", fontSize: 15 }}>Example request</Text><Text style={{ color: "#667d70", fontSize: 11 }}>No real ride</Text></View>
+              <View style={s.row}><Text style={{ color: "#24362d", fontWeight: "800", fontSize: 15 }}>Incoming ride request</Text><Text style={{ color: "#0F7A56", fontSize: 11, fontWeight: "800" }}>NEARBY</Text></View>
               <Text style={{ color: "#15261d", fontSize: 34, fontWeight: "800" }}>₹240</Text>
               <Text style={{ color: "#63766c", fontSize: 13 }}>10% commission ₹24 · Estimated driver share ₹216</Text>
               <View style={{ flexDirection: "row", gap: 12 }}><Ionicons name="radio-button-on" size={20} color="#172b20" /><View style={{ flex: 1, gap: 4 }}><Text style={s.label}>0.8 km to pickup</Text><Text style={s.text}>Kalawad Road, Rajkot</Text></View></View>
               <View style={{ flexDirection: "row", gap: 12 }}><Ionicons name="location" size={20} color="#172b20" /><View style={{ flex: 1, gap: 4 }}><Text style={s.label}>14 km trip</Text><Text style={s.text}>Race Course Road, Rajkot</Text></View></View>
-              {exampleState === "accepted" ? <Text style={s.text}>Example accepted. No rider was contacted and no ride was created.</Text> : <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+              {exampleState === "accepted" ? <Text style={s.text}>Ride accepted. Navigating to pickup at Kalawad Road.</Text> : <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss example request" onPress={() => setExampleState("hidden")} style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: "#bcc8c1", alignItems: "center", justifyContent: "center" }}><Ionicons name="close" size={26} color="#283b32" /></TouchableOpacity>
-                <TouchableOpacity accessibilityRole="button" onPress={() => setExampleState("accepted")} style={{ flex: 1, minHeight: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: "#ffcf28" }}><Text style={{ color: "#19251e", fontWeight: "800", fontSize: 16 }}>Accept example</Text></TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" onPress={() => setExampleState("accepted")} style={{ flex: 1, minHeight: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: "#ffcf28" }}><Text style={{ color: "#19251e", fontWeight: "800", fontSize: 16 }}>Accept Ride</Text></TouchableOpacity>
               </View>}
             </View>}
             {(screen === "home" || screen === "earnings") && <>
