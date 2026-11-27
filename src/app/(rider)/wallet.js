@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  FlatList,
+  ScrollView,
   StyleSheet,
   Text,
-  View,
-  ScrollView,
   TextInput,
-  FlatList,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,6 +65,14 @@ export default function WalletScreen() {
     showToast(`${CURRENCY_SYMBOL}${amount.toFixed(2)} added to wallet`);
   };
 
+  const handleComingSoon = (feature, detail) => {
+    Alert.alert(
+      `${feature} · Coming Soon`,
+      `${detail}\n\nBank API integration and regulatory certifications are in progress. This feature will be available in the upcoming app update.`,
+      [{ text: 'Got It', style: 'default' }]
+    );
+  };
+
   const formatDate = (iso) => {
     const d = new Date(iso);
     const date = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -98,26 +108,171 @@ export default function WalletScreen() {
         <PressableScale onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={THEME.colors.text} />
         </PressableScale>
-        <Text style={styles.headerTitle}>Wallet</Text>
+        <Text style={styles.headerTitle}>Wallet & Banking</Text>
         <View style={{ width: 36 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Balance Card */}
+        {/* Balance Card with Quick Actions */}
         <LinearGradient
           colors={['#064E3B', '#0F7A56']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.balanceCard}
         >
-          <Text style={styles.balanceLabel}>Balance</Text>
-          <Text style={styles.balanceValue}>{CURRENCY_SYMBOL}{balance.toFixed(2)}</Text>
-          <Text style={styles.balanceSub}>UniGo Wallet</Text>
+          <View style={styles.balanceCardTop}>
+            <View>
+              <Text style={styles.balanceLabel}>Available Balance</Text>
+              <Text style={styles.balanceValue}>{CURRENCY_SYMBOL}{balance.toFixed(2)}</Text>
+              <Text style={styles.balanceSub}>UniGo Digital Wallet</Text>
+            </View>
+            <View style={styles.balanceShieldBox}>
+              <Ionicons name="shield-checkmark" size={24} color="#A7F3D0" />
+            </View>
+          </View>
+
+          {/* Quick Action Buttons inside Card */}
+          <View style={styles.quickActionRow}>
+            <TouchableOpacity
+              style={styles.quickActionBtn}
+              onPress={() => handleChipPress(500)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.quickActionIconBox}>
+                <Ionicons name="add" size={18} color="#0F7A56" />
+              </View>
+              <Text style={styles.quickActionText}>+ Add Money</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionBtn}
+              onPress={() =>
+                handleComingSoon(
+                  'Bank Withdrawal',
+                  'Direct withdrawals to your bank account via IMPS/NEFT are coming in the next update.'
+                )
+              }
+              activeOpacity={0.8}
+            >
+              <View style={styles.quickActionIconBox}>
+                <Ionicons name="business-outline" size={17} color="#0F7A56" />
+              </View>
+              <Text style={styles.quickActionText}>To Bank</Text>
+              <View style={styles.soonPill}>
+                <Text style={styles.soonPillText}>SOON</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionBtn}
+              onPress={() =>
+                handleComingSoon(
+                  'UPI Transfer',
+                  'Sending wallet balance directly to a mobile number or UPI ID is launching in the next update.'
+                )
+              }
+              activeOpacity={0.8}
+            >
+              <View style={styles.quickActionIconBox}>
+                <Ionicons name="send-outline" size={16} color="#0F7A56" />
+              </View>
+              <Text style={styles.quickActionText}>Send UPI</Text>
+              <View style={styles.soonPill}>
+                <Text style={styles.soonPillText}>SOON</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
 
-        {/* Add Money */}
+        {/* Banking & Transfers (Coming Soon Features) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Add money</Text>
+          <Text style={styles.sectionTitle}>Banking & Transfers</Text>
+
+          <TouchableOpacity
+            style={styles.serviceCard}
+            onPress={() =>
+              handleComingSoon(
+                'Transfer to Bank Account',
+                'Withdraw your wallet balance directly to your savings/current bank account via instant IMPS or NEFT with zero transaction charges.'
+              )
+            }
+            activeOpacity={0.7}
+          >
+            <View style={styles.serviceIconBox}>
+              <Ionicons name="business-outline" size={22} color="#0F7A56" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.serviceHeaderRow}>
+                <Text style={styles.serviceTitle}>Transfer to Bank Account</Text>
+                <View style={styles.comingSoonBadge}>
+                  <Text style={styles.comingSoonBadgeText}>COMING SOON</Text>
+                </View>
+              </View>
+              <Text style={styles.serviceSubtitle}>
+                Withdraw wallet balance directly to your bank account
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.serviceCard}
+            onPress={() =>
+              handleComingSoon(
+                'Send to Contact or UPI',
+                'Instantly send money to any UniGo user, friend, or UPI ID with 1-tap verification.'
+              )
+            }
+            activeOpacity={0.7}
+          >
+            <View style={styles.serviceIconBox}>
+              <Ionicons name="paper-plane-outline" size={20} color="#0F7A56" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.serviceHeaderRow}>
+                <Text style={styles.serviceTitle}>Send to Contact / UPI</Text>
+                <View style={styles.comingSoonBadge}>
+                  <Text style={styles.comingSoonBadgeText}>COMING SOON</Text>
+                </View>
+              </View>
+              <Text style={styles.serviceSubtitle}>
+                Peer-to-peer balance transfer using phone number or UPI
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.serviceCard}
+            onPress={() =>
+              handleComingSoon(
+                'Auto Top-Up & Standing Instructions',
+                'Set up UPI Autopay so your wallet automatically reloads whenever balance falls below ₹100.'
+              )
+            }
+            activeOpacity={0.7}
+          >
+            <View style={styles.serviceIconBox}>
+              <Ionicons name="repeat-outline" size={22} color="#0F7A56" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.serviceHeaderRow}>
+                <Text style={styles.serviceTitle}>Auto Top-Up & UPI Autopay</Text>
+                <View style={styles.comingSoonBadge}>
+                  <Text style={styles.comingSoonBadgeText}>COMING SOON</Text>
+                </View>
+              </View>
+              <Text style={styles.serviceSubtitle}>
+                Keep rides & food orders uninterrupted with automatic reload
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Add Money Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Add Money to Wallet</Text>
 
           {/* Quick chips */}
           <View style={styles.chipsRow}>
@@ -153,13 +308,13 @@ export default function WalletScreen() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <PressableScale style={styles.addBtn} onPress={handleAddMoney}>
-            <Text style={styles.addBtnText}>Add to wallet</Text>
+            <Text style={styles.addBtnText}>Add to Wallet</Text>
           </PressableScale>
         </View>
 
-        {/* Transactions */}
+        {/* Transactions Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Transactions</Text>
+          <Text style={styles.sectionTitle}>Recent Transactions</Text>
           {transactions.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={44} color={THEME.colors.border} />
@@ -199,16 +354,130 @@ const styles = StyleSheet.create({
   balanceCard: {
     margin: 16,
     borderRadius: 20,
-    padding: 24,
+    padding: 20,
     ...THEME.shadows.card,
+  },
+  balanceCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: THEME.fontWeights.semibold },
   balanceValue: { fontSize: 36, fontWeight: THEME.fontWeights.extrabold, color: '#FFFFFF', marginTop: 4 },
-  balanceSub: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 4 },
+  balanceSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+  balanceShieldBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Quick action buttons in balance card
+  quickActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  quickActionBtn: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    position: 'relative',
+  },
+  quickActionIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  soonPill: {
+    position: 'absolute',
+    top: -6,
+    right: 4,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  soonPillText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
 
   // Section
-  section: { paddingHorizontal: 16, marginTop: 8 },
-  sectionTitle: { fontSize: 17, fontWeight: THEME.fontWeights.bold, color: THEME.colors.text, marginBottom: 12 },
+  section: { paddingHorizontal: 16, marginTop: 14 },
+  sectionTitle: { fontSize: 16, fontWeight: THEME.fontWeights.bold, color: THEME.colors.text, marginBottom: 12 },
+
+  // Service Card (Coming Soon)
+  serviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  serviceIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serviceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  serviceTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  serviceSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  comingSoonBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: '#FDE68A',
+  },
+  comingSoonBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.4,
+  },
 
   // Chips
   chipsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
@@ -248,7 +517,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 10,
     ...THEME.shadows.soft,
   },
   addBtnText: { fontSize: 15, fontWeight: THEME.fontWeights.extrabold, color: '#FFFFFF' },

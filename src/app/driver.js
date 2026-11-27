@@ -491,7 +491,7 @@ export default function Driver() {
                 <View style={{ backgroundColor: "#f2f8f4", padding: 14, borderRadius: 14, gap: 7 }}>
                   <View style={s.row}><Text style={s.text}>UniGo commission (10%)</Text><Text style={s.label}>− ₹{commission.toFixed(2)}</Text></View>
                   <View style={s.row}><Text style={s.label}>Estimated driver share</Text><Text style={s.label}>₹{(quotedFare - commission).toFixed(2)}</Text></View>
-                  <Text style={{ color: "#63766c", fontSize: 12, lineHeight: 18 }}>Estimate only. Payments and payouts are not connected.</Text>
+                  <Text style={{ color: "#63766c", fontSize: 12, lineHeight: 18 }}>Earnings are settled directly to your registered bank account every evening.</Text>
                 </View>
                 <View style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
                   <Ionicons name="radio-button-on" size={20} color="#0f7a56" />
@@ -609,7 +609,7 @@ export default function Driver() {
                   <Text style={{ color: "#123d2c", fontWeight: "800", fontSize: 27 }}>₹{todayDriverShare.toFixed(2)}</Text>
                 </View>
               </View>
-              <Text style={{ color: "#63766c", fontSize: 12, lineHeight: 18 }}>Based on today’s completed rides and the current 10% commission rate. Quoted fares: ₹{todayFare.toFixed(2)}. Estimates only; payments and payouts are not connected.</Text>
+              <Text style={{ color: "#63766c", fontSize: 12, lineHeight: 18 }}>Based on today’s completed rides and the current 10% commission rate. Quoted fares: ₹{todayFare.toFixed(2)}. Daily earnings settle automatically to your registered bank account every evening. On-demand instant cashout is coming soon in the next update.</Text>
             </View>
             {screen === "earnings" && <View style={s.card}>
               <Text style={s.label}>Last 7 days</Text>

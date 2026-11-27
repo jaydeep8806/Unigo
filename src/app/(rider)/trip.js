@@ -331,10 +331,10 @@ export default function TripScreen() {
                   <Text style={sim.plateNumber}>{ride.driver.vehicleNumber}</Text>
                 </View>
                 <View style={sim.contactBtns}>
-                  <TouchableOpacity style={sim.contactBtn} onPress={() => Alert.alert('Contact driver', 'In-app calling is not connected yet.')}>
+                  <TouchableOpacity style={sim.contactBtn} onPress={() => Alert.alert('Voice Call · Coming Soon', 'Direct in-app encrypted calling is launching in the upcoming update. Please call driver directly on mobile in the meantime.')}>
                     <Ionicons name="call-outline" size={20} color="#0f7a56" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={sim.contactBtn} onPress={() => Alert.alert('Contact driver', 'In-app messaging is not connected yet.')}>
+                  <TouchableOpacity style={sim.contactBtn} onPress={() => Alert.alert('Driver Chat · Coming Soon', 'In-app real-time messaging with your driver will be available in the upcoming update.')}>
                     <Ionicons name="chatbubble-outline" size={20} color="#0f7a56" />
                   </TouchableOpacity>
                 </View>
