@@ -22,6 +22,16 @@ export default function AuthScreen({ signup = false }) {
               {!short && <Text style={styles.description}>{signup ? 'Your city, all in one place.' : 'Your next journey starts here.'}</Text>}
             </View>
             <View style={[styles.card, short && styles.shortCard]}><AuthForm key={signup ? 'signup' : 'login'} signup={signup} compact dense={short} onSwitch={() => router.replace(signup ? '/login' : '/signup')} /></View>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.merchantLink}
+              onPress={() => router.push('/restaurant-partner')}
+            >
+              <Ionicons name="restaurant-outline" size={15} color="#0F7A56" />
+              <Text style={styles.merchantLinkText}>
+                Own a restaurant or shop? <Text style={styles.merchantLinkHighlight}>Partner with UniGo ›</Text>
+              </Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -38,4 +48,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, lineHeight: 34, color: '#17382A', fontWeight: '800', textAlign: 'center' }, description: { color: '#718579', fontSize: 14, lineHeight: 20, marginTop: 4, textAlign: 'center' },
   card: { paddingHorizontal: 2 },
   shortTopbar: { marginBottom: 4 }, shortIntro: { marginBottom: 8 }, shortCard: { paddingHorizontal: 2 },
+  merchantLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, paddingVertical: 8 },
+  merchantLinkText: { fontSize: 13, color: '#64748B' },
+  merchantLinkHighlight: { color: '#0F7A56', fontWeight: '800' },
 });

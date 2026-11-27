@@ -6,7 +6,7 @@ import {
   FlatList,
   TextInput,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +15,7 @@ import { useLocation } from '../../context/LocationProvider';
 import { THEME } from '../../constants/theme';
 import PressableScale from '../../components/PressableScale';
 import { RESTAURANTS, FOOD_CATEGORIES, CUISINE_BANNERS } from '../../data/restaurants';
+import { getMergedRestaurants } from '../../services/merchant';
 import { useFoodCart } from '../../context/FoodCartProvider';
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -27,13 +28,26 @@ export default function FoodScreen() {
   const { selectedCity, coordinates } = useLocation();
   const { totalItems } = useFoodCart();
 
+  const [allRestaurants, setAllRestaurants] = useState(RESTAURANTS);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [vegOnly, setVegOnly] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getMergedRestaurants().then((merged) => {
+        if (active) setAllRestaurants(merged);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
   // ── Filter restaurants ───────────────────────────────────────────────
   const filteredRestaurants = useMemo(() => {
-    let list = [...RESTAURANTS];
+    let list = [...allRestaurants];
 
     if (activeCategory !== 'all') {
       list = list.filter((r) => r.category === activeCategory);
@@ -57,7 +71,7 @@ export default function FoodScreen() {
       return b.rating - a.rating;
     });
     return list;
-  }, [search, activeCategory, vegOnly]);
+  }, [allRestaurants, search, activeCategory, vegOnly]);
 
   // ── Cuisine banner ───────────────────────────────────────────────────
   const renderCuisineBanner = useCallback(
@@ -372,6 +386,32 @@ export default function FoodScreen() {
     []
   );
 
+  const ListFooter = useMemo(
+    () => (
+      <View style={styles.partnerBanner}>
+        <View style={styles.partnerBannerLeft}>
+          <View style={styles.partnerIconBox}>
+            <Ionicons name="restaurant" size={20} color="#0F7A56" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.partnerTitle}>Own a Restaurant or Food Shop?</Text>
+            <Text style={styles.partnerSub}>
+              List your eatery on UniGo Food in 2 minutes & start receiving orders!
+            </Text>
+          </View>
+        </View>
+        <PressableScale
+          style={styles.partnerBtn}
+          onPress={() => router.push('/restaurant-partner')}
+        >
+          <Text style={styles.partnerBtnText}>Partner With Us</Text>
+          <Ionicons name="arrow-forward" size={14} color="#fff" />
+        </PressableScale>
+      </View>
+    ),
+    [router]
+  );
+
   return (
     <View style={styles.screen}>
       <FlatList
@@ -379,6 +419,7 @@ export default function FoodScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderRestaurant}
         ListHeaderComponent={ListHeader}
+        ListFooterComponent={ListFooter}
         ListEmptyComponent={EmptyState}
         contentContainerStyle={{
           paddingBottom: totalItems > 0 ? insets.bottom + 80 : insets.bottom + 24,
@@ -742,6 +783,59 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '800',
     fontSize: 16,
+  },
+
+  /* Merchant Partner Banner */
+  partnerBanner: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 30,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    gap: 12,
+  },
+  partnerBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  partnerIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partnerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#064E3B',
+  },
+  partnerSub: {
+    fontSize: 12,
+    color: '#047857',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  partnerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F7A56',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  partnerBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

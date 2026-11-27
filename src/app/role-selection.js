@@ -19,7 +19,13 @@ export default function RoleSelection() {
   async function choose(role) {
     try {
       await chooseRole(role);
-      router.replace(role === "driver" ? "/driver" : "/(rider)/(tabs)");
+      router.replace(
+        role === "driver"
+          ? "/driver"
+          : role === "merchant"
+          ? "/restaurant-partner"
+          : "/(rider)/(tabs)"
+      );
     } catch {
       setError("Could not save your choice. Try again.");
     }
@@ -38,7 +44,7 @@ export default function RoleSelection() {
             [
               "user",
               "person-outline",
-              "Continue as User",
+              "Continue as Customer",
               "Rides, food, shopping and more. Your everyday essentials, together.",
             ],
             [
@@ -46,6 +52,12 @@ export default function RoleSelection() {
               "car-sport-outline",
               "Continue as Driver",
               "Your vehicle. Your schedule. Connect with riders around you.",
+            ],
+            [
+              "merchant",
+              "restaurant-outline",
+              "Restaurant & Shop Partner",
+              "List your restaurant, manage your menu, and receive food orders directly.",
             ],
           ].map(([role, icon, title, description]) => (
             <TouchableOpacity

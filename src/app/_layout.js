@@ -17,7 +17,7 @@ function RootNavigationGate() {
   const router = useRouter();
   const segments = useSegments();
   const inAuth = segments[0] === 'login' || segments[0] === 'signup';
-  const inPublic = inAuth || segments[0] === 'welcome';
+  const inPublic = inAuth || segments[0] === 'welcome' || segments[0] === 'restaurant-partner';
 
   useEffect(() => {
     if (isLoading || isSessionLoading || roleLoading) return;
@@ -31,8 +31,23 @@ function RootNavigationGate() {
       router.replace('/role-selection');
     } else if (user && role && !hasMadeDecision && !inLocationPermissionScreen) {
       router.replace('/location-permission');
-    } else if (user && hasMadeDecision && role && (inLocationPermissionScreen || inPublic || (role === 'driver' && segments[0] === '(rider)') || (role === 'user' && segments[0] === 'driver'))) {
-      router.replace(role === 'driver' ? '/driver' : '/(rider)/(tabs)');
+    } else if (
+      user &&
+      hasMadeDecision &&
+      role &&
+      (inLocationPermissionScreen ||
+        (inPublic && segments[0] !== 'restaurant-partner') ||
+        (role === 'driver' && segments[0] === '(rider)') ||
+        (role === 'user' && segments[0] === 'driver') ||
+        (role === 'merchant' && segments[0] !== 'restaurant-partner'))
+    ) {
+      router.replace(
+        role === 'driver'
+          ? '/driver'
+          : role === 'merchant'
+          ? '/restaurant-partner'
+          : '/(rider)/(tabs)'
+      );
     }
   }, [isLoading, isSessionLoading, hasMadeDecision, role, roleLoading, segments, router, inAuth, inPublic, user]);
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -16,6 +16,7 @@ import { foodImage } from '../../data/foodImages';
 import { THEME } from '../../constants/theme';
 import PressableScale from '../../components/PressableScale';
 import { RESTAURANTS } from '../../data/restaurants';
+import { getMergedRestaurants } from '../../services/merchant';
 import { useFoodCart } from '../../context/FoodCartProvider';
 
 const ratingColor = (r) => (r >= 4 ? '#22C55E' : r >= 3 ? '#F59E0B' : '#EF4444');
@@ -25,16 +26,37 @@ export default function RestaurantScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
 
-  const restaurant = useMemo(
-    () => RESTAURANTS.find((r) => r.id === id),
-    [id]
-  );
+  const [restaurant, setRestaurant] = useState(() => RESTAURANTS.find((r) => r.id === id) || null);
+
+  useEffect(() => {
+    let active = true;
+    getMergedRestaurants().then((merged) => {
+      if (active) {
+        const found = merged.find((r) => r.id === id);
+        if (found) setRestaurant(found);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   const { quantities: cart, totalItems, itemTotal: cartTotal, updateQuantity } = useFoodCart();
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const addToCart = useCallback((itemId) => updateQuantity(itemId, 1), [updateQuantity]);
+  const addToCart = useCallback(
+    (itemId, itemObj) => {
+      updateQuantity(
+        itemId,
+        1,
+        itemObj && restaurant
+          ? { ...itemObj, restaurantId: restaurant.id, restaurantName: restaurant.name }
+          : undefined
+      );
+    },
+    [updateQuantity, restaurant]
+  );
   const removeFromCart = useCallback((itemId) => updateQuantity(itemId, -1), [updateQuantity]);
 
   // ── Filter menu by search ───────────────────────────────────────────
@@ -102,13 +124,13 @@ export default function RestaurantScreen() {
               >
                 <Ionicons name="restaurant" size={20} color={THEME.colors.primary} />
               </LinearGradient>
-              {foodImage(restaurant.category, item.name, item.id) ? <Image source={foodImage(restaurant.category, item.name, item.id)} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} /> : null}
+              {foodImage(restaurant?.category, item.name, item.id) ? <Image source={foodImage(restaurant?.category, item.name, item.id)} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} /> : null}
             </View>
 
-            {restaurant.informationOnly ? null : qty === 0 ? (
+            {restaurant?.informationOnly ? null : qty === 0 ? (
               <PressableScale
                 style={styles.addBtn}
-                onPress={() => addToCart(item.id)}
+                onPress={() => addToCart(item.id, item)}
               >
                 <Text style={styles.addBtnText}>ADD</Text>
                 <Ionicons name="add" size={14} color={THEME.colors.primary} />
@@ -124,7 +146,7 @@ export default function RestaurantScreen() {
                 <Text style={styles.qtyText}>{qty}</Text>
                 <PressableScale
                   style={styles.qtyBtn}
-                  accessibilityRole="button" accessibilityLabel={`Add one ${item.name}`} onPress={() => addToCart(item.id)}
+                  accessibilityRole="button" accessibilityLabel={`Add one ${item.name}`} onPress={() => addToCart(item.id, item)}
                 >
                   <Ionicons name="add" size={20} color="#fff" />
                 </PressableScale>
