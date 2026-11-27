@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useLocation } from "../context/LocationProvider";
+import { useRole } from "../context/RoleProvider";
 import {
   driverAction,
   driverHistory,
@@ -43,6 +44,7 @@ const labels = {
   completed: "Ride completed",
 };
 export default function Driver() {
+  const { chooseRole } = useRole();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -164,6 +166,11 @@ export default function Driver() {
       const existing = afterSignIn ? await driverProfile() : null;
       const saved = existing || await registerDriver(form);
       setProfile(saved);
+      try {
+        await chooseRole("driver");
+      } catch (err) {
+        console.warn("Could not set driver role:", err);
+      }
       setRides([]);
       setTodayRides([]);
     } catch (e) {
@@ -289,8 +296,16 @@ export default function Driver() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await refresh(); } finally { setRefreshing(false); } }} />}
         contentContainerStyle={s.content}
       >
-        <View style={s.row}>
-          <Text style={s.eyebrow}>UNIGO DRIVER</Text>
+        <View style={[s.row, { alignItems: 'center' }]}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/partner'))}
+            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EBF4EF', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}
+          >
+            <Ionicons name="arrow-back" size={20} color="#17382A" />
+          </TouchableOpacity>
+          <Text style={[s.eyebrow, { flex: 1 }]}>UNIGO DRIVER</Text>
           <Button
             secondary
             title="Switch role"
@@ -311,11 +326,6 @@ export default function Driver() {
             <Text style={s.text}>
               Join the UNIGO driver community with your own vehicle.
             </Text>
-            <Button
-              secondary
-              title="Already registered? Sign in"
-              onPress={() => setAccount(true)}
-            />
             <View style={s.row}>
               {stages.map((_, i) => (
                 <View

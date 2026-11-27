@@ -133,19 +133,6 @@ export default function PartnerHubScreen() {
             <Ionicons name="arrow-forward" size={18} color="#fff" />
           </PressableScale>
         </View>
-
-        {/* Footer info */}
-        <View style={styles.footerBox}>
-          <Text style={styles.footerNote}>
-            Already a partner?{' '}
-            <Text
-              style={styles.footerLink}
-              onPress={() => router.push(user ? '/role-selection' : '/login')}
-            >
-              Sign in to switch roles or view dashboard ›
-            </Text>
-          </Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -241,8 +228,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   primaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
-
-  footerBox: { alignItems: 'center', marginTop: 10, paddingVertical: 10 },
-  footerNote: { fontSize: 13, color: '#64748B', textAlign: 'center' },
-  footerLink: { color: '#0F7A56', fontWeight: '800' },
 });

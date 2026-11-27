@@ -270,18 +270,6 @@ export default function RestaurantPartnerScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {!user && (
-          <View style={styles.guestBanner}>
-            <Ionicons name="information-circle-outline" size={18} color="#B45309" />
-            <Text style={styles.guestText}>
-              Listing in demo mode.{' '}
-              <Text style={styles.guestLink} onPress={() => router.push('/login')}>
-                Log in or sign up
-              </Text>{' '}
-              to sync your eatery to your UniGo account.
-            </Text>
-          </View>
-        )}
         {/* ─── CASE A: RESTAURANT ALREADY REGISTERED (DASHBOARD) ──── */}
         {profile ? (
           <>
@@ -779,30 +767,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   outlineBtnText: { color: '#0F7A56', fontSize: 14, fontWeight: '800' },
-
-  /* Guest Banner */
-  guestBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
-  },
-  guestText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#92400E',
-    lineHeight: 18,
-  },
-  guestLink: {
-    color: '#0F7A56',
-    fontWeight: '800',
-    textDecorationLine: 'underline',
-  },
 
   /* Multi-Select Cuisine Header */
   cuisineHeaderRow: {
