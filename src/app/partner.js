@@ -9,12 +9,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSession } from '../context/SessionProvider';
+import { useRole } from '../context/RoleProvider';
 import PressableScale from '../components/PressableScale';
 
 export default function PartnerHubScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useSession();
+  const { chooseRole } = useRole();
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -84,7 +86,12 @@ export default function PartnerHubScreen() {
 
           <PressableScale
             style={styles.primaryBtn}
-            onPress={() => router.push('/driver')}
+            onPress={async () => {
+              if (user) {
+                await chooseRole('driver');
+              }
+              router.push('/driver');
+            }}
           >
             <Text style={styles.primaryBtnText}>Register as Driver Partner</Text>
             <Ionicons name="arrow-forward" size={18} color="#fff" />
@@ -127,7 +134,12 @@ export default function PartnerHubScreen() {
 
           <PressableScale
             style={[styles.primaryBtn, { backgroundColor: '#0F7A56' }]}
-            onPress={() => router.push('/restaurant-partner')}
+            onPress={async () => {
+              if (user) {
+                await chooseRole('merchant');
+              }
+              router.push('/restaurant-partner');
+            }}
           >
             <Text style={styles.primaryBtnText}>List Your Restaurant or Shop</Text>
             <Ionicons name="arrow-forward" size={18} color="#fff" />

@@ -286,23 +286,6 @@ export default function RiderHomeScreen() {
               <View style={styles.bellBadgeDot} />
             </PressableScale>
           </View>
-
-          {/* Unified Super App Search Bar */}
-          <PressableScale
-            style={styles.searchBar}
-            onPress={() => router.push('/(rider)/book')}
-            accessibilityLabel="Search rides, food, spa, or destination"
-          >
-            <View style={styles.searchIconBox}>
-              <Ionicons name="search" size={18} color={THEME.colors.primary} />
-            </View>
-            <Text style={styles.searchPlaceholder} numberOfLines={1}>
-              Search rides, food, spa, shops...
-            </Text>
-            <View style={styles.bookPill}>
-              <Text style={styles.bookPillText}>Explore</Text>
-            </View>
-          </PressableScale>
         </LinearGradient>
 
         {/* ─────────────────────────────────────────────────────────────
@@ -594,7 +577,7 @@ const styles = StyleSheet.create({
   // ── a. Header ────────────────────────────────────────────────────────
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 40, // extra bottom space so the services sheet can overlap
+    paddingBottom: 34,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     ...THEME.shadows.header,
@@ -603,7 +586,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   headerGreetingCol: {
     flex: 1,

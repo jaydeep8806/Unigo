@@ -16,7 +16,7 @@ import { foodImage } from '../../data/foodImages';
 import { THEME } from '../../constants/theme';
 import PressableScale from '../../components/PressableScale';
 import { RESTAURANTS } from '../../data/restaurants';
-import { getMergedRestaurants } from '../../services/merchant';
+import { getAllRestaurantsForPreview } from '../../services/merchant';
 import { useFoodCart } from '../../context/FoodCartProvider';
 
 const ratingColor = (r) => (r >= 4 ? '#22C55E' : r >= 3 ? '#F59E0B' : '#EF4444');
@@ -30,7 +30,7 @@ export default function RestaurantScreen() {
 
   useEffect(() => {
     let active = true;
-    getMergedRestaurants().then((merged) => {
+    getAllRestaurantsForPreview().then((merged) => {
       if (active) {
         const found = merged.find((r) => r.id === id);
         if (found) setRestaurant(found);
