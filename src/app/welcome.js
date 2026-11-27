@@ -23,9 +23,6 @@ export default function Welcome() {
       <View style={styles.footer}>
         <TouchableOpacity style={styles.button} onPress={() => router.push('/signup')} accessibilityRole="button"><Text style={styles.buttonText}>Sign up</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.button, styles.outline]} onPress={() => router.push('/login')} accessibilityRole="button"><Text style={[styles.buttonText, styles.outlineText]}>Log in</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.merchantWelcomeLink} onPress={() => router.push('/restaurant-partner')} accessibilityRole="button">
-          <Text style={styles.merchantWelcomeText}>Own a restaurant or shop? <Text style={styles.merchantWelcomeHighlight}>Partner with UniGo ›</Text></Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   </SafeAreaView>;
@@ -38,7 +35,4 @@ const styles = StyleSheet.create({
   mapCard: { width: 154, height: 155, backgroundColor: '#fff', borderRadius: 23, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }], elevation: 5, shadowColor: '#174632', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } }, mapHeader: { position: 'absolute', top: 13, left: 15, flexDirection: 'row', gap: 4 }, mapDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#B8DCC3' },
   pin: { position: 'absolute', top: 32, right: 42, width: 73, height: 73, borderRadius: 25, backgroundColor: '#0F7A56', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '10deg' }] }, car: { position: 'absolute', bottom: 22, right: 30, width: 62, height: 62, borderRadius: 21, backgroundColor: '#D8F2DE', alignItems: 'center', justifyContent: 'center' }, spark: { position: 'absolute', top: 33, left: 24 }, tagline: { fontSize: 10, fontWeight: '800', letterSpacing: 2, color: '#73917E', textAlign: 'center' },
   footer: { gap: 10, paddingTop: 12 }, button: { minHeight: 52, borderRadius: 28, backgroundColor: '#0F7A56', justifyContent: 'center', alignItems: 'center' }, buttonText: { color: '#fff', fontWeight: '800', fontSize: 15 }, outline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#0F7A56' }, outlineText: { color: '#0F7A56' },
-  merchantWelcomeLink: { alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
-  merchantWelcomeText: { fontSize: 13, color: '#718579' },
-  merchantWelcomeHighlight: { color: '#0F7A56', fontWeight: '800' },
 });

@@ -98,8 +98,8 @@ export default function ProfileScreen() {
         <View style={styles.card}>
           <MenuRow icon="person-outline" title="Personal details" subtitle="Update your name and phone number" onPress={editProfile} />
           <MenuRow icon="navigate-outline" title="Location permission" subtitle="Manage access in device settings" onPress={openSettings} />
-          <MenuRow icon="swap-horizontal-outline" title="Switch to driver" subtitle="Choose how you use UNIGO" onPress={() => router.push('/role-selection')} />
-          <MenuRow icon="restaurant-outline" title="List your Restaurant / Shop" subtitle="Partner with UniGo Food & manage orders" onPress={() => router.push('/restaurant-partner')} last />
+          <MenuRow icon="swap-horizontal-outline" title="Switch role" subtitle="Choose how you use UNIGO" onPress={() => router.push('/role-selection')} />
+          <MenuRow icon="briefcase-outline" title="Partner with UniGo" subtitle="Drive or list your food business" onPress={() => router.push('/partner')} last />
         </View>
         <Text style={styles.sectionLabel}>SESSION</Text>
         <View style={styles.card}>

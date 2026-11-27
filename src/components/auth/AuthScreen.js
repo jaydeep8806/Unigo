@@ -26,11 +26,11 @@ export default function AuthScreen({ signup = false }) {
               accessibilityRole="button"
               style={styles.merchantLink}
               activeOpacity={0.7}
-              onPress={() => router.push('/restaurant-partner')}
+              onPress={() => router.push('/partner')}
             >
-              <Ionicons name="restaurant-outline" size={15} color="#0F7A56" />
+              <Ionicons name="sparkles-outline" size={15} color="#0F7A56" />
               <Text style={styles.merchantLinkText}>
-                Own a restaurant or shop? <Text style={styles.merchantLinkHighlight}>Partner with UniGo ›</Text>
+                Want to partner with UniGo? <Text style={styles.merchantLinkHighlight}>Drive or List a Shop ›</Text>
               </Text>
             </TouchableOpacity>
           </View>

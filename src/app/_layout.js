@@ -17,7 +17,7 @@ function RootNavigationGate() {
   const router = useRouter();
   const segments = useSegments();
   const inAuth = segments[0] === 'login' || segments[0] === 'signup';
-  const inPublic = inAuth || segments[0] === 'welcome' || segments[0] === 'restaurant-partner';
+  const inPublic = inAuth || segments[0] === 'welcome' || segments[0] === 'partner' || segments[0] === 'restaurant-partner';
 
   useEffect(() => {
     if (isLoading || isSessionLoading || roleLoading) return;
@@ -36,7 +36,7 @@ function RootNavigationGate() {
       hasMadeDecision &&
       role &&
       (inLocationPermissionScreen ||
-        (inPublic && segments[0] !== 'restaurant-partner') ||
+        (inPublic && segments[0] !== 'restaurant-partner' && segments[0] !== 'partner') ||
         (role === 'driver' && segments[0] === '(rider)') ||
         (role === 'user' && segments[0] === 'driver'))
     ) {

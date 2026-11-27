@@ -50,7 +50,11 @@ export default function FoodScreen() {
     let list = [...allRestaurants];
 
     if (activeCategory !== 'all') {
-      list = list.filter((r) => r.category === activeCategory);
+      list = list.filter(
+        (r) =>
+          r.category === activeCategory ||
+          (Array.isArray(r.categories) && r.categories.includes(activeCategory))
+      );
     }
     if (vegOnly) {
       list = list.filter((r) => r.veg);

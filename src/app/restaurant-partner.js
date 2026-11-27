@@ -23,13 +23,21 @@ import PressableScale from '../components/PressableScale';
 
 const CUISINE_OPTIONS = [
   { id: 'thali', label: 'Thali & Kathiyawadi', emoji: '🍽️' },
-  { id: 'biryani', label: 'Biryani & Mughlai', emoji: '🍛' },
+  { id: 'gujarati', label: 'Gujarati & Farsan', emoji: '🍛' },
+  { id: 'punjabi', label: 'North Indian & Punjabi', emoji: '🥘' },
+  { id: 'biryani', label: 'Biryani & Mughlai', emoji: '🍲' },
+  { id: 'south_indian', label: 'South Indian & Dosa', emoji: '🫓' },
   { id: 'pizza', label: 'Pizza & Italian', emoji: '🍕' },
   { id: 'burger', label: 'Burgers & Fast Food', emoji: '🍔' },
-  { id: 'south_indian', label: 'South Indian & Dosa', emoji: '🫓' },
   { id: 'chinese', label: 'Chinese & Pan-Asian', emoji: '🥡' },
-  { id: 'street_food', label: 'Street Food & Snacks', emoji: '🍟' },
-  { id: 'dessert', label: 'Desserts & Ice Cream', emoji: '🍰' },
+  { id: 'street_food', label: 'Street Food & Chaat', emoji: '🍟' },
+  { id: 'sandwich', label: 'Sandwiches & Wraps', emoji: '🥪' },
+  { id: 'cafe', label: 'Tea, Coffee & Cafe', emoji: '☕' },
+  { id: 'bakery', label: 'Bakery & Cakes', emoji: '🥐' },
+  { id: 'dessert', label: 'Desserts & Sweets', emoji: '🍰' },
+  { id: 'icecream', label: 'Ice Cream & Shakes', emoji: '🍨' },
+  { id: 'healthy', label: 'Juices & Healthy Bowls', emoji: '🥗' },
+  { id: 'continental', label: 'Continental & Mexican', emoji: '🌮' },
 ];
 
 export default function RestaurantPartnerScreen() {
@@ -47,11 +55,16 @@ export default function RestaurantPartnerScreen() {
   const [name, setName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [phone, setPhone] = useState('');
-  const [category, setCategory] = useState('thali');
+  const [selectedCuisines, setSelectedCuisines] = useState(['thali']);
   const [veg, setVeg] = useState(true);
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('Rajkot');
   const [deliveryTime, setDeliveryTime] = useState('20-25 min');
+
+  // Business & Safety Verification State
+  const [fssai, setFssai] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [upi, setUpi] = useState('');
 
   // Menu items
   const [dish1Name, setDish1Name] = useState('');
@@ -71,6 +84,24 @@ export default function RestaurantPartnerScreen() {
       mounted = false;
     };
   }, []);
+
+  const toggleCuisine = (id) => {
+    setSelectedCuisines((prev) => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((c) => c !== id);
+      }
+      return [...prev, id];
+    });
+  };
+
+  const selectAllCuisines = () => {
+    if (selectedCuisines.length === CUISINE_OPTIONS.length) {
+      setSelectedCuisines(['thali']);
+    } else {
+      setSelectedCuisines(CUISINE_OPTIONS.map((c) => c.id));
+    }
+  };
 
   const handleOpenCustomerView = async (target) => {
     if (!user) {
@@ -103,10 +134,18 @@ export default function RestaurantPartnerScreen() {
       Alert.alert('Required', 'Please enter your restaurant address.');
       return;
     }
+    if (selectedCuisines.length === 0) {
+      Alert.alert('Required', 'Please select at least one cuisine category.');
+      return;
+    }
 
     setSubmitting(true);
     try {
-      const selectedCuisineObj = CUISINE_OPTIONS.find((c) => c.id === category);
+      const selectedLabels = selectedCuisines
+        .map((id) => CUISINE_OPTIONS.find((c) => c.id === id)?.label?.split('&')[0]?.trim())
+        .filter(Boolean);
+      const formattedCuisine = selectedLabels.join(', ') || 'Multi-Cuisine';
+      const primaryCategory = selectedCuisines[0] || 'thali';
 
       const menuItems = [];
       if (dish1Name.trim()) {
@@ -153,13 +192,18 @@ export default function RestaurantPartnerScreen() {
         name,
         ownerName,
         phone,
-        category,
-        cuisine: selectedCuisineObj ? selectedCuisineObj.label : 'Specialty Food',
+        category: primaryCategory,
+        categories: selectedCuisines,
+        cuisine: formattedCuisine,
         veg,
         address,
         city,
         deliveryTime,
         deliveryFee: 20,
+        fssai: fssai.trim() || 'FSSAI License Active',
+        gstin: gstin.trim(),
+        upi: upi.trim(),
+        verified: true,
         menu,
       });
 
@@ -253,6 +297,10 @@ export default function RestaurantPartnerScreen() {
                   <View style={styles.badgeRow}>
                     <View style={styles.activePill}>
                       <Text style={styles.activePillText}>LIVE ON UNIGO</Text>
+                    </View>
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="shield-checkmark" size={10} color="#047857" style={{ marginRight: 3 }} />
+                      <Text style={styles.verifiedBadgeText}>FSSAI VERIFIED</Text>
                     </View>
                     {profile.veg && (
                       <View style={styles.vegBadge}>
@@ -390,16 +438,35 @@ export default function RestaurantPartnerScreen() {
                 onChangeText={setPhone}
               />
 
-              <Text style={styles.fieldLabel}>Cuisine Category *</Text>
+              <View style={styles.cuisineHeaderRow}>
+                <Text style={styles.fieldLabel}>
+                  Cuisine Categories * ({selectedCuisines.length} selected)
+                </Text>
+                <TouchableOpacity onPress={selectAllCuisines}>
+                  <Text style={styles.selectAllText}>
+                    {selectedCuisines.length === CUISINE_OPTIONS.length ? 'Clear Selection' : 'Select All'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.fieldSubHint}>
+                Select all cuisines that your restaurant serves. Customers can discover your food when filtering by any of these!
+              </Text>
               <View style={styles.cuisineGrid}>
                 {CUISINE_OPTIONS.map((c) => {
-                  const selected = category === c.id;
+                  const selected = selectedCuisines.includes(c.id);
                   return (
                     <TouchableOpacity
                       key={c.id}
                       style={[styles.cuisineChip, selected && styles.cuisineChipActive]}
-                      onPress={() => setCategory(c.id)}
+                      onPress={() => toggleCuisine(c.id)}
+                      activeOpacity={0.7}
                     >
+                      <Ionicons
+                        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={15}
+                        color={selected ? '#0F7A56' : '#94A3B8'}
+                        style={{ marginRight: 5 }}
+                      />
                       <Text style={styles.cuisineEmoji}>{c.emoji}</Text>
                       <Text style={[styles.cuisineText, selected && styles.cuisineTextActive]}>
                         {c.label}
@@ -489,6 +556,54 @@ export default function RestaurantPartnerScreen() {
                 value={dish2Price}
                 onChangeText={setDish2Price}
               />
+            </View>
+
+            {/* Step 4: Business & Safety Verification */}
+            <View style={styles.card}>
+              <View style={styles.verificationCardHeader}>
+                <View style={styles.shieldIconBox}>
+                  <Ionicons name="shield-checkmark" size={20} color="#0F7A56" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionTitle}>4. Business & Safety Verification</Text>
+                  <Text style={styles.muted}>Builds trust with food buyers and enables daily payouts.</Text>
+                </View>
+              </View>
+
+              <Text style={styles.fieldLabel}>FSSAI License / Registration No.</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="14-digit FSSAI number (e.g. 10020021000123)"
+                keyboardType="numeric"
+                maxLength={14}
+                value={fssai}
+                onChangeText={setFssai}
+              />
+              <Text style={styles.fieldSubHint}>
+                Food Safety and Standards Authority of India 14-digit registration number.
+              </Text>
+
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>GSTIN (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="15-character GST number (e.g. 24AAAAA0000A1Z5)"
+                autoCapitalize="characters"
+                maxLength={15}
+                value={gstin}
+                onChangeText={setGstin}
+              />
+
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Bank Settlement UPI ID / Account</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. restaurant@upi or 9825100000@okaxis"
+                autoCapitalize="none"
+                value={upi}
+                onChangeText={setUpi}
+              />
+              <Text style={styles.fieldSubHint}>
+                Daily order revenue is settled directly to this account every evening.
+              </Text>
             </View>
 
             {/* Submit Button */}
@@ -687,5 +802,56 @@ const styles = StyleSheet.create({
     color: '#0F7A56',
     fontWeight: '800',
     textDecorationLine: 'underline',
+  },
+
+  /* Multi-Select Cuisine Header */
+  cuisineHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  selectAllText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F7A56',
+  },
+  fieldSubHint: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+
+  /* Verification Badges */
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  verifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  verificationCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  shieldIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
